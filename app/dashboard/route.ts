@@ -8,29 +8,22 @@ function getSnapshot(targetDate: string) {
   const items = shipments.flatMap((s) => s.items);
   const totalItemsCount = items.reduce((sum, i) => sum + i.quantity, 0);
 
-  // Worker breakdowns
+  // Worker breakdowns (single worker per label)
   const workerMap: Record<string, { unique_labels: number; items: number; products: Record<string, number> }> = {};
   for (const w of store.workers) {
     workerMap[w.name] = { unique_labels: 0, items: 0, products: {} };
   }
-  workerMap["Mixed"] = { unique_labels: 0, items: 0, products: {} };
 
   // Calculate per shipment
   for (const s of shipments) {
-    const workersInShipment = new Set(s.items.map((i) => i.assigned_worker || "Sohel"));
-    if (workersInShipment.size > 1) {
-      workerMap["Mixed"].unique_labels += 1;
-      workerMap["Mixed"].items += s.items.reduce((sum, it) => sum + it.quantity, 0);
-    } else {
-      const singleWorker = Array.from(workersInShipment)[0] || "Sohel";
-      if (!workerMap[singleWorker]) {
-        workerMap[singleWorker] = { unique_labels: 0, items: 0, products: {} };
-      }
-      workerMap[singleWorker].unique_labels += 1;
+    const primaryWorker = s.items[0]?.assigned_worker || "Sohel";
+    if (!workerMap[primaryWorker]) {
+      workerMap[primaryWorker] = { unique_labels: 0, items: 0, products: {} };
     }
+    workerMap[primaryWorker].unique_labels += 1;
 
     for (const item of s.items) {
-      const worker = item.assigned_worker || "Sohel";
+      const worker = item.assigned_worker || primaryWorker;
       if (!workerMap[worker]) {
         workerMap[worker] = { unique_labels: 0, items: 0, products: {} };
       }
@@ -68,22 +61,6 @@ function getSnapshot(targetDate: string) {
       top_products: topProducts,
     };
   });
-
-  const mixedStats = workerMap["Mixed"] || { unique_labels: 0, items: 0, products: {} };
-  const mixedProgress = {
-    id: 9999,
-    name: "Mixed Labels",
-    active: true,
-    status: "Multi-Worker",
-    unique_labels: mixedStats.unique_labels,
-    items: mixedStats.items,
-    target_quota: 20,
-    progress_percent: Math.min(100, Math.round((mixedStats.unique_labels / 20) * 100)),
-    label_progress_percent: Math.min(100, Math.round((mixedStats.unique_labels / 20) * 100)),
-    share_of_total: totalItemsCount > 0 ? Number(((mixedStats.items / totalItemsCount) * 100).toFixed(1)) : 0,
-    items_per_label: mixedStats.unique_labels > 0 ? Number((mixedStats.items / mixedStats.unique_labels).toFixed(2)) : 0,
-    top_products: [],
-  };
 
   // Product Category progress calculations
   const categoryMap: Record<string, {
@@ -219,7 +196,6 @@ function getSnapshot(targetDate: string) {
     unknown_skus: totalUnknown,
     worker_totals: workerMap,
     worker_progress: workerProgress,
-    mixed_progress: mixedProgress,
     category_progress: categoryProgress,
     product_stock_out: Object.values(productTotals).sort((a, b) => b.quantity - a.quantity),
     raw_material_requirements: raw,

@@ -127,6 +127,12 @@ export interface BatchItem {
 
 export interface ParsedLabel {
   page: number;
+  original_page?: number;
+  sequence?: number;
+  group_page?: number;
+  group_total?: number;
+  sku_group?: string;
+  sku_group_index?: number;
   awb: string;
   order_id: string;
   duplicate: boolean;
@@ -146,9 +152,120 @@ export interface ParsedLabel {
   }[];
 }
 
+export type LabelSortMode = 'sku_grouped' | 'worker_sku' | 'category_sku' | 'original_page' | 'awb_order';
+
 // Natural sorting helper: sorts strings with embedded numbers naturally (e.g. SE-3B, SE-6B, SE-12B)
 export function naturalSortCompare(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+// Universal real-time server-side label sorting engine
+// Groups labels by SKU and assigns sequential page numbers for each group as well as global sequence
+export function sortParsedLabels(labels: ParsedLabel[], mode: LabelSortMode = 'sku_grouped'): ParsedLabel[] {
+  const cloned: ParsedLabel[] = labels.map((l, idx) => ({
+    ...l,
+    original_page: l.original_page || l.page || idx + 1,
+    items: l.items.map((it) => ({
+      ...it,
+      assigned_worker: it.assigned_worker || 'Sohel',
+    })),
+  }));
+
+  switch (mode) {
+    case 'sku_grouped': {
+      // Group identical primary SKUs together consecutively (e.g. all SE-3B on 1..4, AX6 on 5..8, R1 on 9..11)
+      cloned.sort((a, b) => {
+        const skuA = (a.items[0]?.product || a.items[0]?.raw_sku || 'Unmapped').toUpperCase();
+        const skuB = (b.items[0]?.product || b.items[0]?.raw_sku || 'Unmapped').toUpperCase();
+        const skuDiff = naturalSortCompare(skuA, skuB);
+        if (skuDiff !== 0) return skuDiff;
+
+        // Same SKU: keep original relative sequence
+        return (a.original_page || 0) - (b.original_page || 0);
+      });
+      break;
+    }
+
+    case 'worker_sku': {
+      // Group by single worker (Sohel -> Kartik Da), then by SKU within worker
+      const workerRank: Record<string, number> = { Sohel: 1, 'Kartik Da': 2 };
+      cloned.sort((a, b) => {
+        const workerA = a.items[0]?.assigned_worker || 'Sohel';
+        const workerB = b.items[0]?.assigned_worker || 'Sohel';
+
+        const rankA = workerRank[workerA] || 99;
+        const rankB = workerRank[workerB] || 99;
+        if (rankA !== rankB) return rankA - rankB;
+
+        const skuA = (a.items[0]?.product || a.items[0]?.raw_sku || 'Unmapped').toUpperCase();
+        const skuB = (b.items[0]?.product || b.items[0]?.raw_sku || 'Unmapped').toUpperCase();
+        const skuDiff = naturalSortCompare(skuA, skuB);
+        if (skuDiff !== 0) return skuDiff;
+
+        return (a.original_page || 0) - (b.original_page || 0);
+      });
+      break;
+    }
+
+    case 'category_sku': {
+      cloned.sort((a, b) => {
+        const prodA = a.items[0]?.product_id ? global.__flipkart_store?.products.find((p) => p.id === a.items[0]?.product_id) : null;
+        const prodB = b.items[0]?.product_id ? global.__flipkart_store?.products.find((p) => p.id === b.items[0]?.product_id) : null;
+        const catA = (prodA?.category || 'General').toUpperCase();
+        const catB = (prodB?.category || 'General').toUpperCase();
+        const catDiff = naturalSortCompare(catA, catB);
+        if (catDiff !== 0) return catDiff;
+
+        const skuA = (a.items[0]?.product || a.items[0]?.raw_sku || 'Unmapped').toUpperCase();
+        const skuB = (b.items[0]?.product || b.items[0]?.raw_sku || 'Unmapped').toUpperCase();
+        return naturalSortCompare(skuA, skuB);
+      });
+      break;
+    }
+
+    case 'original_page': {
+      // Raw order from the uploaded PDF
+      cloned.sort((a, b) => (a.original_page || a.page || 0) - (b.original_page || b.page || 0));
+      break;
+    }
+
+    case 'awb_order': {
+      cloned.sort((a, b) => naturalSortCompare(a.awb, b.awb));
+      break;
+    }
+  }
+
+  // Calculate SKU group totals for sequential group numbering
+  const groupTotals: Record<string, number> = {};
+  const groupIndexes: Record<string, number> = {};
+  let currentGroupOrder = 0;
+
+  for (const item of cloned) {
+    const groupKey = item.items[0]?.product || item.items[0]?.raw_sku || 'Unmapped';
+    groupTotals[groupKey] = (groupTotals[groupKey] || 0) + 1;
+    if (groupIndexes[groupKey] === undefined) {
+      currentGroupOrder += 1;
+      groupIndexes[groupKey] = currentGroupOrder;
+    }
+  }
+
+  const groupCurrentCounter: Record<string, number> = {};
+
+  // Re-assign sequence, global page, and within-group sequential page numbers
+  return cloned.map((item, idx) => {
+    const groupKey = item.items[0]?.product || item.items[0]?.raw_sku || 'Unmapped';
+    groupCurrentCounter[groupKey] = (groupCurrentCounter[groupKey] || 0) + 1;
+
+    return {
+      ...item,
+      page: mode === 'original_page' ? (item.original_page || idx + 1) : idx + 1,
+      sequence: idx + 1,
+      group_page: groupCurrentCounter[groupKey],
+      group_total: groupTotals[groupKey] || 1,
+      sku_group: groupKey,
+      sku_group_index: groupIndexes[groupKey] || 1,
+    };
+  });
 }
 
 // PackCalc calculation logic
@@ -248,6 +365,8 @@ function initStore() {
     { id: 11, name: "Star Garbage Bag 12", internal_code: "GB-STAR-12", category: "Garbage Bag", assigned_worker: "Kartik Da", sort_group: "Garbage Bags", sort_order: 80, active: true, bag_family: "Star", raw_3bag_qty: 4, raw_2bag_qty: 0, created_at: now, updated_at: now },
     { id: 12, name: "Averx Garbage Bag 16", internal_code: "GB-AVERX-16", category: "Garbage Bag", assigned_worker: "Kartik Da", sort_group: "Garbage Bags", sort_order: 90, active: true, bag_family: "Averx", raw_3bag_qty: 0, raw_2bag_qty: 8, created_at: now, updated_at: now },
     { id: 13, name: "Plain Garbage Bag 5", internal_code: "GB-PLAIN-5", category: "Garbage Bag", assigned_worker: "Kartik Da", sort_group: "Garbage Bags", sort_order: 100, active: true, bag_family: "Plain", raw_3bag_qty: 2, raw_2bag_qty: 1, created_at: now, updated_at: now },
+    { id: 14, name: "SE-3B", internal_code: "SE-3B", category: "Selfie Stick", assigned_worker: "Sohel", sort_group: "Tripods", sort_order: 15, active: true, created_at: now, updated_at: now },
+    { id: 15, name: "AX6", internal_code: "AX6", category: "Electronics", assigned_worker: "Sohel", sort_group: "Audio", sort_order: 42, active: true, created_at: now, updated_at: now },
   ];
 
   const packingRecipes: PackingRecipe[] = [
@@ -274,6 +393,10 @@ function initStore() {
     { id: 15, raw_sku: "GB-STAR-12-ROLL", product_id: 11, match_type: "exact", active: true, times_seen: 30, first_seen_at: now, last_seen_at: now },
     { id: 16, raw_sku: "GB-AVERX-16-ROLL", product_id: 12, match_type: "exact", active: true, times_seen: 26, first_seen_at: now, last_seen_at: now },
     { id: 17, raw_sku: "BP-ROLL-2026", product_id: 10, match_type: "exact", active: true, times_seen: 15, first_seen_at: now, last_seen_at: now },
+    { id: 18, raw_sku: "7_SEST-NAF-SE-3B-B-1", product_id: 14, match_type: "exact", active: true, times_seen: 38, first_seen_at: now, last_seen_at: now },
+    { id: 19, raw_sku: "SE-3B", product_id: 14, match_type: "exact", active: true, times_seen: 24, first_seen_at: now, last_seen_at: now },
+    { id: 20, raw_sku: "AX6-MIC-W-01", product_id: 15, match_type: "exact", active: true, times_seen: 31, first_seen_at: now, last_seen_at: now },
+    { id: 21, raw_sku: "AX6", product_id: 15, match_type: "exact", active: true, times_seen: 20, first_seen_at: now, last_seen_at: now },
   ];
 
   const patternRules: PatternRule[] = [
@@ -494,7 +617,7 @@ function initStore() {
       payment_mode: "PREPAID",
       items: [
         { id: 13, shipment_id: 11, raw_sku: "7_TRIP-CLIP001-NAF-B-1", product_id: 7, product: "Mobile Holder Clip", description: "Mobile Holder Clip For Tripod", quantity: 2, assigned_worker: "Sohel", mapping_status: "mapped" },
-        { id: 14, shipment_id: 11, raw_sku: "GB-STAR-12-ROLL", product_id: 11, product: "Star Garbage Bag 12", description: "Star Garbage Bag 12 Pack", quantity: 2, assigned_worker: "Kartik Da", mapping_status: "mapped" },
+        { id: 14, shipment_id: 11, raw_sku: "7_MIC-NAF-3.5MM-B-1", product_id: 6, product: "NAFA Clip Microphone", description: "NAFA 3.5mm Clip For Youtube", quantity: 2, assigned_worker: "Sohel", mapping_status: "mapped" },
       ],
     },
     // Yesterday's historical shipments

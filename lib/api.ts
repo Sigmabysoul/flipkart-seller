@@ -166,6 +166,12 @@ export type PatternRule = {
 
 export type ParsedLabelItem = {
   page: number
+  original_page?: number
+  sequence?: number
+  group_page?: number
+  group_total?: number
+  sku_group?: string
+  sku_group_index?: number
   awb: string
   order_id: string
   duplicate: boolean
@@ -195,6 +201,7 @@ export type ProcessBatchResponse = {
   duplicate_awbs: number
   total_items: number
   unknown_skus: number
+  sort_mode?: string
   labels: ParsedLabelItem[]
   cropped_labels_url: string
 }
@@ -240,9 +247,10 @@ export const createPatternRule = (payload: Partial<PatternRule>) => apiFetch<Pat
 export const deletePatternRule = (id: number) => apiFetch<{ status: string }>(`/training/rules?id=${id}`, { method: "DELETE" })
 
 // Batch & Labels Processing APIs
-export async function processLabels(files: File[]): Promise<ProcessBatchResponse> {
+export async function processLabels(files: File[], sortMode = "sku_grouped"): Promise<ProcessBatchResponse> {
   const form = new FormData()
   files.forEach((file) => form.append("files", file))
+  form.append("sort_mode", sortMode)
   return apiFetch<ProcessBatchResponse>("/batches/process", { method: "POST", body: form })
 }
 export const confirmBatch = (id: number) => apiFetch<any>(`/batches/${id}/confirm`, { method: "POST" })

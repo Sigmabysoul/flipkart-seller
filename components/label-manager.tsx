@@ -488,21 +488,6 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
         },
       ]
 
-  const mixedData = dash?.mixed_progress ?? {
-    id: 9999,
-    name: 'Mixed Labels',
-    active: true,
-    status: 'Multi-Worker',
-    unique_labels: dash?.worker_totals?.Mixed?.unique_labels ?? 0,
-    items: dash?.worker_totals?.Mixed?.items ?? 0,
-    target_quota: 20,
-    progress_percent: Math.min(100, Math.round(((dash?.worker_totals?.Mixed?.unique_labels ?? 0) / 20) * 100)),
-    label_progress_percent: Math.min(100, Math.round(((dash?.worker_totals?.Mixed?.unique_labels ?? 0) / 20) * 100)),
-    share_of_total: dash?.total_items ? Number((((dash?.worker_totals?.Mixed?.items ?? 0) / dash.total_items) * 100).toFixed(1)) : 0,
-    items_per_label: 1,
-    top_products: [],
-  }
-
   const categoryList = dash?.category_progress ?? []
 
   const shiftOverview = dash?.shift_overview ?? {
@@ -544,7 +529,6 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
     workersList.forEach((w: any) => {
       lines.push(`${w.name},${w.status},${w.unique_labels},${w.items},${w.share_of_total}%`)
     })
-    lines.push(`Mixed Parcels,Shared Line,${mixedData.unique_labels},${mixedData.items},${mixedData.share_of_total}%`)
     lines.push(``)
     lines.push(`PRODUCT CATEGORY BREAKDOWN`)
     lines.push(`Category,Dispatched Units,Volume Share(%),Active AWBs,Unique SKUs`)
@@ -744,102 +728,6 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
         </div>
       </div>
 
-      {/* Daily Shift Progress & Operational Throughput */}
-      <section className="panel mb-6" id="daily-shift-progress-panel">
-        <div className="section-head">
-          <div>
-            <h2>Daily Shift Progress & Throughput</h2>
-            <p>Real-time completion metrics calculated against daily fulfillment targets</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="live-dot animate-pulse" />
-            <Badge kind="info">Live Operations Connected</Badge>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200/80 dark:border-slate-700/60">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-muted">Item Pick Progress</span>
-              <strong className="font-bold">{dash?.total_items ?? 0} / {shiftOverview.target_items} units</strong>
-            </div>
-            <div className="progress-track">
-              <div
-                className="progress-fill teal"
-                style={{ width: `${Math.min(100, shiftOverview.item_progress_percent)}%` }}
-              />
-            </div>
-            <div className="flex justify-between items-center text-[10px] text-muted mt-2">
-              <span>{shiftOverview.item_progress_percent}% target quota</span>
-              <span>{Math.max(0, shiftOverview.target_items - (dash?.total_items ?? 0))} remaining</span>
-            </div>
-          </div>
-
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200/80 dark:border-slate-700/60">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-muted">Shipment Label Quota</span>
-              <strong className="font-bold">{dash?.unique_labels ?? 0} / {shiftOverview.target_labels} AWBs</strong>
-            </div>
-            <div className="progress-track">
-              <div
-                className="progress-fill blue"
-                style={{ width: `${Math.min(100, shiftOverview.label_progress_percent)}%` }}
-              />
-            </div>
-            <div className="flex justify-between items-center text-[10px] text-muted mt-2">
-              <span>{shiftOverview.label_progress_percent}% of shift target</span>
-              <span>{Math.max(0, shiftOverview.target_labels - (dash?.unique_labels ?? 0))} AWBs left</span>
-            </div>
-          </div>
-
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200/80 dark:border-slate-700/60">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-muted">Clean Shipment Rate</span>
-              <strong className="font-bold text-emerald-600 dark:text-emerald-400">{shiftOverview.clean_shipment_rate}%</strong>
-            </div>
-            <div className="progress-track">
-              <div
-                className="progress-fill teal"
-                style={{ width: `${shiftOverview.clean_shipment_rate}%` }}
-              />
-            </div>
-            <div className="text-[10px] text-muted mt-2 flex justify-between items-center">
-              <span>{dash?.duplicate_labels ?? 0} duplicates prevented</span>
-              <button
-                className="text-blue-500 hover:underline font-medium text-[10px]"
-                onClick={() => setDuplicateAuditModal(true)}
-              >
-                Audit Log
-              </button>
-            </div>
-          </div>
-
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200/80 dark:border-slate-700/60">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-muted">SKU Recognition Rate</span>
-              <strong className="font-bold text-blue-600 dark:text-blue-400">{shiftOverview.mapping_accuracy_rate}%</strong>
-            </div>
-            <div className="progress-track">
-              <div
-                className="progress-fill blue"
-                style={{ width: `${shiftOverview.mapping_accuracy_rate}%` }}
-              />
-            </div>
-            <div className="text-[10px] text-muted mt-2 flex justify-between items-center">
-              <span>{dash?.unknown_skus ? `${dash.unknown_skus} unmapped SKUs` : 'All items mapped cleanly'}</span>
-              {dash?.unknown_skus ? (
-                <button
-                  className="text-blue-500 hover:underline font-medium text-[10px]"
-                  onClick={() => go('training')}
-                >
-                  Train Now
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Worker Daily Progress & Allocation */}
       <section className="section" id="worker-progress-section">
         <div className="section-head">
@@ -929,52 +817,6 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
               </div>
             )
           })}
-
-          {/* Mixed Shipments Card */}
-          <div
-            className="worker-card mixed-card cursor-pointer hover:border-purple-400/60 transition-all shadow-sm"
-            id="worker-card-mixed"
-            onClick={() => setSelectedWorkerModal(mixedData)}
-            title="Click to view mixed multi-worker shipments"
-          >
-            <div className="worker-top">
-              <div className="avatar gray-avatar">M</div>
-              <div className="flex items-center gap-2">
-                <Badge kind="info">Multi-Worker</Badge>
-                <Eye size={14} className="text-muted hover:text-purple-500" />
-              </div>
-            </div>
-            <h3>Mixed Labels</h3>
-
-            <div className="worker-metrics">
-              <div>
-                <strong>{mixedData.unique_labels}</strong>
-                <span>Multi-product AWBs</span>
-              </div>
-              <div>
-                <strong>{mixedData.items}</strong>
-                <span>Shared items</span>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-200/70 dark:border-slate-700/60">
-              <div className="flex justify-between items-center text-[11px] mb-1">
-                <span className="text-muted">Multi-worker share</span>
-                <strong className="font-semibold">{mixedData.share_of_total}%</strong>
-              </div>
-              <div className="progress-track">
-                <div
-                  className="progress-fill purple"
-                  style={{ width: `${Math.min(100, mixedData.share_of_total * 2)}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="mt-3 flex items-center justify-between text-[11px] text-muted">
-              <span>Status: <strong>Joint pack</strong></span>
-              <span>Requires shared line</span>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -1317,11 +1159,7 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
                   </thead>
                   <tbody>
                     {(dash?.product_stock_out || [])
-                      .filter((p: any) =>
-                        selectedWorkerModal.name === 'Mixed Labels'
-                          ? p.worker === 'Mixed'
-                          : p.worker === selectedWorkerModal.name
-                      )
+                      .filter((p: any) => p.worker === selectedWorkerModal.name)
                       .map((p: any) => (
                         <tr key={p.name} className="border-b border-border last:border-0">
                           <td className="p-2 font-semibold">{p.name}</td>
@@ -1481,7 +1319,7 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
 
             {/* Worker Breakdown Picklists */}
             <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-              {['Sohel', 'Kartik Da', 'Mixed'].map((workerName) => {
+              {['Sohel', 'Kartik Da'].map((workerName) => {
                 const itemsForWorker = (dash?.product_stock_out || []).filter((p: any) => p.worker === workerName)
                 if (itemsForWorker.length === 0) return null
 
@@ -1489,7 +1327,7 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
                   <div key={workerName} className="border border-border rounded-lg p-3 bg-card">
                     <div className="flex justify-between items-center pb-2 mb-2 border-b border-border">
                       <strong className="text-xs text-blue-600 dark:text-blue-400 uppercase tracking-wide">
-                        {workerName === 'Mixed' ? 'Mixed Multi-Worker Picklist' : `${workerName}'s Picklist`}
+                        {workerName}'s Picklist
                       </strong>
                       <span className="text-xs font-bold">
                         {itemsForWorker.reduce((sum: number, p: any) => sum + p.quantity, 0)} units
@@ -1551,11 +1389,120 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
 // ----------------------------------------------------------------------
 // 2. PROCESS LABELS VIEW
 // ----------------------------------------------------------------------
+type SortMode = 'sku_grouped' | 'worker_sku' | 'category_sku' | 'original_page' | 'awb_order'
+
+function sortClientLabels(labels: ParsedLabelItem[], mode: SortMode): ParsedLabelItem[] {
+  const cloned: ParsedLabelItem[] = labels.map((l, idx) => ({
+    ...l,
+    original_page: l.original_page || l.page || idx + 1,
+    items: [...l.items],
+  }))
+
+  const naturalCompare = (a: string, b: string) =>
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+
+  switch (mode) {
+    case 'sku_grouped': {
+      // Group identical primary SKUs together consecutively (e.g. all SE-3B on 1..4, AX6 on 5..8, R1 on 9..11)
+      cloned.sort((a, b) => {
+        const skuA = (a.items[0]?.product || a.items[0]?.raw_sku || 'Unmapped').toUpperCase()
+        const skuB = (b.items[0]?.product || b.items[0]?.raw_sku || 'Unmapped').toUpperCase()
+        const diff = naturalCompare(skuA, skuB)
+        if (diff !== 0) return diff
+
+        return (a.original_page || 0) - (b.original_page || 0)
+      })
+      break
+    }
+
+    case 'worker_sku': {
+      const workerRank: Record<string, number> = { Sohel: 1, 'Kartik Da': 2 }
+      cloned.sort((a, b) => {
+        const workerA = a.items[0]?.assigned_worker || 'Sohel'
+        const workerB = b.items[0]?.assigned_worker || 'Sohel'
+
+        const rankA = workerRank[workerA] || 99
+        const rankB = workerRank[workerB] || 99
+        if (rankA !== rankB) return rankA - rankB
+
+        const skuA = (a.items[0]?.product || a.items[0]?.raw_sku || 'Unmapped').toUpperCase()
+        const skuB = (b.items[0]?.product || b.items[0]?.raw_sku || 'Unmapped').toUpperCase()
+        const diff = naturalCompare(skuA, skuB)
+        if (diff !== 0) return diff
+
+        return (a.original_page || 0) - (b.original_page || 0)
+      })
+      break
+    }
+
+    case 'category_sku': {
+      cloned.sort((a, b) => {
+        const descA = (a.items[0]?.description || a.items[0]?.product || '').toUpperCase()
+        const descB = (b.items[0]?.description || b.items[0]?.product || '').toUpperCase()
+        const diff = naturalCompare(descA, descB)
+        if (diff !== 0) return diff
+
+        const skuA = (a.items[0]?.product || a.items[0]?.raw_sku || '').toUpperCase()
+        const skuB = (b.items[0]?.product || b.items[0]?.raw_sku || '').toUpperCase()
+        return naturalCompare(skuA, skuB)
+      })
+      break
+    }
+
+    case 'original_page': {
+      cloned.sort((a, b) => (a.original_page || a.page || 0) - (b.original_page || b.page || 0))
+      break
+    }
+
+    case 'awb_order': {
+      cloned.sort((a, b) => naturalCompare(a.awb, b.awb))
+      break
+    }
+  }
+
+  // Count totals per SKU group
+  const skuCounts = new Map<string, number>()
+  cloned.forEach((item) => {
+    const sku = item.items[0]?.product || item.items[0]?.raw_sku || 'Unmapped'
+    skuCounts.set(sku, (skuCounts.get(sku) || 0) + 1)
+  })
+
+  // Assign group_page (1, 2, 3, 4) and global sequence (1, 2, 3...)
+  const skuCurrentIndex = new Map<string, number>()
+  let currentGroup = ''
+  let groupIndex = 0
+
+  return cloned.map((item, idx) => {
+    const sku = item.items[0]?.product || item.items[0]?.raw_sku || 'Unmapped'
+    const currIndex = (skuCurrentIndex.get(sku) || 0) + 1
+    skuCurrentIndex.set(sku, currIndex)
+
+    if (sku !== currentGroup) {
+      currentGroup = sku
+      groupIndex++
+    }
+
+    const groupTotal = skuCounts.get(sku) || 1
+
+    return {
+      ...item,
+      page: mode === 'original_page' ? (item.original_page || idx + 1) : idx + 1,
+      sequence: idx + 1,
+      group_page: currIndex,
+      group_total: groupTotal,
+      sku_group: sku,
+      sku_group_index: groupIndex,
+    }
+  })
+}
+
 function ProcessLabelsView({ go, showToast }: any) {
   const [processing, setProcessing] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [batchData, setBatchData] = useState<ProcessBatchResponse | null>(null)
-  const [activeFilter, setActiveFilter] = useState<'all' | 'mapped' | 'duplicate' | 'unknown' | 'mismatch' | 'mixed'>('all')
+  const [sortMode, setSortMode] = useState<SortMode>('sku_grouped')
+  const [selectedSkuCluster, setSelectedSkuCluster] = useState<string | null>(null)
+  const [activeFilter, setActiveFilter] = useState<'all' | 'mapped' | 'duplicate' | 'unknown' | 'mismatch'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [trainItem, setTrainItem] = useState<{ raw_sku: string; description: string; seen?: number } | null>(null)
   const [duplicateModalItem, setDuplicateModalItem] = useState<ParsedLabelItem | null>(null)
@@ -1587,7 +1534,7 @@ function ProcessLabelsView({ go, showToast }: any) {
     }, 280)
 
     try {
-      const result = await processLabels(Array.from(files))
+      const result = await processLabels(Array.from(files), sortMode)
       clearInterval(interval)
       setCurrentStep(7)
       setBatchData(result)
@@ -1621,25 +1568,67 @@ function ProcessLabelsView({ go, showToast }: any) {
     if (!batchData) return
     try {
       await recordPrintEvent(batchData.batch_id, 'Sohel', 'full_batch')
-      window.open(`/batches/${batchData.batch_id}/pdf`, '_blank')
-      showToast(`Print action recorded for ${batchData.pages_scanned} sorted cropped labels.`)
+      window.open(`/batches/${batchData.batch_id}/pdf?sort=${sortMode}`, '_blank')
+      showToast(`Print opened in real-time sequence (${sortModeLabel(sortMode)}).`)
       mutate(`/dashboard?date=${batchData.processing_date}`)
     } catch (err: any) {
       alert(err.message)
     }
   }
 
-  const labels = batchData?.labels || []
-  const filteredLabels = labels.filter((l) => {
-    const isMixed = l.items.length > 1
+  const sortModeLabel = (mode: SortMode) => {
+    switch (mode) {
+      case 'sku_grouped':
+        return 'Group by SKU (Sequential 1,2,3,4...)'
+      case 'worker_sku':
+        return 'Worker Grouping (Sohel ➔ Kartik Da)'
+      case 'category_sku':
+        return 'Product Category'
+      case 'original_page':
+        return 'Original PDF Order'
+      case 'awb_order':
+        return 'AWB Alphanumeric'
+    }
+  }
+
+  // Live real-time sorted labels
+  const rawLabels = batchData?.labels || []
+  const sortedLabels = React.useMemo(() => {
+    return sortClientLabels(rawLabels, sortMode)
+  }, [rawLabels, sortMode])
+
+  // Extract contiguous SKU clusters for quick visualization & filtering
+  const clusters = React.useMemo(() => {
+    const list: { name: string; count: number; startSeq: number; endSeq: number; origPages: number[] }[] = []
+    let current: { name: string; count: number; startSeq: number; endSeq: number; origPages: number[] } | null = null
+
+    sortedLabels.forEach((l, idx) => {
+      const skuName = l.items[0]?.product || l.items[0]?.raw_sku || 'Mixed'
+      const origPg = l.original_page || l.page || idx + 1
+      if (!current || current.name !== skuName) {
+        if (current) list.push(current)
+        current = { name: skuName, count: 1, startSeq: idx + 1, endSeq: idx + 1, origPages: [origPg] }
+      } else {
+        current.count++
+        current.endSeq = idx + 1
+        current.origPages.push(origPg)
+      }
+    })
+    if (current) list.push(current)
+    return list
+  }, [sortedLabels])
+
+  const filteredLabels = sortedLabels.filter((l) => {
     const isUnknown = l.items.some((i) => i.mapping_status === 'unknown')
     const isDup = l.duplicate
     const isMismatch = l.mismatch
+    const skuName = l.items[0]?.product || l.items[0]?.raw_sku || 'Unmapped'
+
+    if (selectedSkuCluster && skuName !== selectedSkuCluster) return false
 
     if (activeFilter === 'duplicate' && !isDup) return false
     if (activeFilter === 'unknown' && !isUnknown) return false
     if (activeFilter === 'mismatch' && !isMismatch) return false
-    if (activeFilter === 'mixed' && !isMixed) return false
     if (activeFilter === 'mapped' && (isUnknown || isDup || isMismatch)) return false
 
     if (searchQuery) {
@@ -1661,12 +1650,12 @@ function ProcessLabelsView({ go, showToast }: any) {
       <PageHead
         eyebrow="Operations / Process labels"
         title="Process Flipkart Labels"
-        description="Upload Flipkart shipping-label PDFs. Automatically crops out invoices, extracts AWBs & SKUs, and flags duplicates."
+        description="Upload Flipkart shipping-label PDFs. Automatically crops out invoices, extracts AWBs & SKUs, and sorts labels in contiguous sequence."
         action={
           <div className="flex gap-2">
             {batchData && (
               <button className="button dark-button" id="print-batch-top-btn" onClick={handlePrint}>
-                <Printer size={16} /> Print sorted labels
+                <Printer size={16} /> Print sorted labels ({sortModeLabel(sortMode).split(' ')[0]})
               </button>
             )}
           </div>
@@ -1711,7 +1700,7 @@ function ProcessLabelsView({ go, showToast }: any) {
             <h3>{batchData ? batchData.filename : 'Drop Flipkart label PDF here'}</h3>
             <p>
               {batchData
-                ? `${batchData.pages_scanned} pages extracted and sorted`
+                ? `${batchData.pages_scanned} pages extracted and sorted in real-time`
                 : 'Click to browse or drag & drop PDF files from computer'}
             </p>
 
@@ -1775,19 +1764,146 @@ function ProcessLabelsView({ go, showToast }: any) {
               <strong className="rose-text">{batchData ? batchData.unknown_skus : '—'}</strong>
             </div>
             <div>
-              <span>Sort format</span>
-              <strong className="text-xs">Product Natural Sort</strong>
+              <span>Active Sorting</span>
+              <strong className="text-xs text-blue-400 font-semibold">{sortMode === 'sku_grouped' ? 'SKU Sequence' : sortMode === 'worker_sku' ? 'Worker Grouped' : 'Custom'}</strong>
             </div>
           </div>
 
           <div className="summary-note">
             <ShieldAlert size={18} />
             <span>
-              <strong>Duplicate protection active:</strong> Duplicate AWBs can be reprinted safely without affecting warehouse stock-out totals or PackCalc material requirements.
+              <strong>Real-time sorting active:</strong> Identical SKUs are grouped into unbroken sequences (e.g. SE-3B pg 1, 27, 28, 34 ➔ Seq 1, 2, 3, 4; AX6 pg 2, 9, 40, 57 ➔ Seq 5, 6, 7, 8).
             </span>
           </div>
         </div>
       </div>
+
+      {/* Real-time Sorting Toolbar & SKU Cluster Strip */}
+      {batchData && (
+        <section className="panel mb-6 p-4 border border-blue-500/30 bg-slate-900/40" id="realtime-sorting-controls">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Sparkles size={18} className="text-blue-400" />
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Real-time Label Sequence & Sorting</h3>
+                <p className="text-xs text-muted">Select grouping rule to instantly reorganize labels & thermal print sequence</p>
+              </div>
+            </div>
+
+            {/* Sort Mode Buttons */}
+            <div className="flex flex-wrap items-center gap-1.5" id="sort-mode-selector">
+              <button
+                className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                  sortMode === 'sku_grouped'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                    : 'bg-card border border-border text-muted hover:text-foreground'
+                }`}
+                onClick={() => setSortMode('sku_grouped')}
+                id="sort-sku-grouped-btn"
+                title="Group identical SKUs sequentially (1,2,3,4...)"
+              >
+                <Tags size={13} /> Group by SKU (1,2,3,4...)
+              </button>
+
+              <button
+                className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                  sortMode === 'worker_sku'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                    : 'bg-card border border-border text-muted hover:text-foreground'
+                }`}
+                onClick={() => setSortMode('worker_sku')}
+                id="sort-worker-sku-btn"
+                title="Group by assigned worker first, then SKU"
+              >
+                <Users size={13} /> Worker ➔ SKU
+              </button>
+
+              <button
+                className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                  sortMode === 'category_sku'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                    : 'bg-card border border-border text-muted hover:text-foreground'
+                }`}
+                onClick={() => setSortMode('category_sku')}
+                id="sort-category-sku-btn"
+                title="Group by product category description"
+              >
+                <FolderTree size={13} /> Category
+              </button>
+
+              <button
+                className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                  sortMode === 'original_page'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                    : 'bg-card border border-border text-muted hover:text-foreground'
+                }`}
+                onClick={() => setSortMode('original_page')}
+                id="sort-original-page-btn"
+                title="Show original PDF upload order"
+              >
+                <FileText size={13} /> Original PDF
+              </button>
+
+              <button
+                className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                  sortMode === 'awb_order'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                    : 'bg-card border border-border text-muted hover:text-foreground'
+                }`}
+                onClick={() => setSortMode('awb_order')}
+                id="sort-awb-order-btn"
+                title="Sort by AWB alphanumeric sequence"
+              >
+                <ClipboardList size={13} /> AWB Order
+              </button>
+            </div>
+          </div>
+
+          {/* SKU Cluster Ribbon */}
+          <div className="pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-muted flex items-center gap-1.5">
+                <Box size={13} className="text-emerald-400" />
+                Contiguous Sequence Clusters ({clusters.length} groups):
+              </span>
+              {selectedSkuCluster && (
+                <button
+                  className="text-xs text-blue-400 hover:underline flex items-center gap-1"
+                  onClick={() => setSelectedSkuCluster(null)}
+                >
+                  <X size={12} /> Clear cluster filter
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
+              {clusters.map((c) => {
+                const isSelected = selectedSkuCluster === c.name
+                return (
+                  <button
+                    key={c.name}
+                    className={`text-xs px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 border ${
+                      isSelected
+                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                        : 'bg-card/80 border-border hover:border-emerald-500/50 text-foreground'
+                    }`}
+                    onClick={() => setSelectedSkuCluster(isSelected ? null : c.name)}
+                    title={`Click to filter to ${c.name} (Orig Pgs: ${c.origPages.join(', ')})`}
+                  >
+                    <span className="font-bold">{c.name}</span>
+                    <span className="bg-slate-800/80 px-1.5 py-0.2 rounded text-[11px] font-mono text-emerald-300">
+                      {c.count} {c.count === 1 ? 'unit' : 'units'}
+                    </span>
+                    <span className="text-[10px] text-muted">
+                      (Seq #{c.startSeq}{c.count > 1 ? `–#${c.endSeq}` : ''})
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Label Review Section */}
       {batchData && (
@@ -1795,7 +1911,10 @@ function ProcessLabelsView({ go, showToast }: any) {
           <div className="section-head">
             <div>
               <h2>Label review & verification</h2>
-              <p>Showing {filteredLabels.length} of {labels.length} extracted shipping labels</p>
+              <p>
+                Showing {filteredLabels.length} of {sortedLabels.length} extracted shipping labels •
+                Sorted in real-time by <strong>{sortModeLabel(sortMode)}</strong>
+              </p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -1813,25 +1932,25 @@ function ProcessLabelsView({ go, showToast }: any) {
                   className={`button ${activeFilter === 'all' ? 'primary' : 'secondary'}`}
                   onClick={() => setActiveFilter('all')}
                 >
-                  All ({labels.length})
+                  All ({sortedLabels.length})
                 </button>
                 <button
                   className={`button ${activeFilter === 'unknown' ? 'primary' : 'secondary'}`}
                   onClick={() => setActiveFilter('unknown')}
                 >
-                  Unknown ({labels.filter((l) => l.items.some((i) => i.mapping_status === 'unknown')).length})
+                  Unknown ({sortedLabels.filter((l) => l.items.some((i) => i.mapping_status === 'unknown')).length})
                 </button>
                 <button
                   className={`button ${activeFilter === 'duplicate' ? 'primary' : 'secondary'}`}
                   onClick={() => setActiveFilter('duplicate')}
                 >
-                  Duplicates ({labels.filter((l) => l.duplicate).length})
+                  Duplicates ({sortedLabels.filter((l) => l.duplicate).length})
                 </button>
                 <button
                   className={`button ${activeFilter === 'mismatch' ? 'primary' : 'secondary'}`}
                   onClick={() => setActiveFilter('mismatch')}
                 >
-                  Mismatches ({labels.filter((l) => l.mismatch).length})
+                  Mismatches ({sortedLabels.filter((l) => l.mismatch).length})
                 </button>
               </div>
             </div>
@@ -1840,7 +1959,8 @@ function ProcessLabelsView({ go, showToast }: any) {
           <TableWrap>
             <thead>
               <tr>
-                <th>Page</th>
+                <th style={{ width: 90 }}>Seq #</th>
+                <th>Orig Pg</th>
                 <th>AWB / Order ID</th>
                 <th>Customer</th>
                 <th>Product / Flipkart SKU</th>
@@ -1851,100 +1971,129 @@ function ProcessLabelsView({ go, showToast }: any) {
               </tr>
             </thead>
             <tbody>
-              {filteredLabels.map((l) => {
+              {filteredLabels.map((l, index) => {
                 const isUnknown = l.items.some((i) => i.mapping_status === 'unknown')
-                const isMulti = l.items.length > 1
-                return (
-                  <tr key={`${l.page}-${l.awb}`} className={l.duplicate ? 'bg-amber-500/5' : l.mismatch ? 'bg-rose-500/5' : ''}>
-                    <td className="text-muted font-mono">{l.page}</td>
-                    <td>
-                      <strong className="mono block">{l.awb}</strong>
-                      <small className="mono text-muted">{l.order_id}</small>
-                    </td>
-                    <td>
-                      <div>
-                        <strong>{l.customer_name || 'Customer'}</strong>
-                        <small className="text-muted">{l.customer_city}</small>
-                      </div>
-                    </td>
-                    <td>
-                      {l.items.map((item, idx) => (
-                        <div key={idx} className={idx > 0 ? 'mt-1 pt-1 border-t border-slate-700/20' : ''}>
-                          <strong>{item.product || <span className="rose-text">Unknown Product</span>}</strong>
-                          <small className="mono block text-muted">{item.raw_sku}</small>
-                        </div>
-                      ))}
-                    </td>
-                    <td>
-                      {l.items.map((item, idx) => (
-                        <div key={idx}>
-                          <strong>{item.quantity}</strong>
-                        </div>
-                      ))}
-                    </td>
-                    <td>
-                      <span className="worker-name">
-                        <i
-                          className={`dot ${
-                            isMulti
-                              ? 'gray'
-                              : l.items[0]?.assigned_worker === 'Kartik Da'
-                              ? 'teal'
-                              : 'blue'
-                          }`}
-                        />
-                        {isMulti ? 'Mixed' : l.items[0]?.assigned_worker || 'Sohel'}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="flex flex-col gap-1 items-start">
-                        {l.mismatch ? (
-                          <StatusBadge value="Mismatch" />
-                        ) : l.duplicate ? (
-                          <StatusBadge value="Duplicate" />
-                        ) : isUnknown ? (
-                          <StatusBadge value="Unknown" />
-                        ) : isMulti ? (
-                          <StatusBadge value="Mixed" />
-                        ) : (
-                          <StatusBadge value="Mapped" />
-                        )}
+                const currentSku = l.items[0]?.product || l.items[0]?.raw_sku || 'Unmapped'
+                const prevSku = index > 0 ? (filteredLabels[index - 1].items[0]?.product || filteredLabels[index - 1].items[0]?.raw_sku || 'Unmapped') : null
+                const isFirstOfGroup = index === 0 || currentSku !== prevSku
+                const worker = l.items[0]?.assigned_worker || 'Sohel'
 
-                        {l.duplicate && !l.mismatch && (
-                          <small className="table-note">Counted previously</small>
+                return (
+                  <React.Fragment key={`${l.page}-${l.awb}-${index}`}>
+                    {/* SKU Group Divider Header */}
+                    {isFirstOfGroup && sortMode === 'sku_grouped' && (
+                      <tr className="bg-slate-800/40 border-y border-blue-500/20">
+                        <td colSpan={9} className="py-1.5 px-3">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-blue-400 flex items-center gap-1.5">
+                              <Tags size={12} /> {currentSku} Group
+                            </span>
+                            <span className="text-[11px] text-muted font-mono">
+                              Sequential pick sequence ({l.group_total || 1} {l.group_total === 1 ? 'label' : 'labels'})
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    <tr className={l.duplicate ? 'bg-amber-500/5' : l.mismatch ? 'bg-rose-500/5' : ''}>
+                      <td>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded font-mono font-bold text-xs bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                            #{l.sequence || l.page}
+                          </span>
+                          {l.group_total && l.group_total > 1 ? (
+                            <span className="text-[10px] font-mono text-emerald-400 font-semibold">
+                              Pg {l.group_page}/{l.group_total}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="text-muted font-mono text-xs">
+                        Pg {l.original_page || l.page}
+                      </td>
+                      <td>
+                        <strong className="mono block">{l.awb}</strong>
+                        <small className="mono text-muted">{l.order_id}</small>
+                      </td>
+                      <td>
+                        <div>
+                          <strong>{l.customer_name || 'Customer'}</strong>
+                          <small className="text-muted">{l.customer_city}</small>
+                        </div>
+                      </td>
+                      <td>
+                        {l.items.map((item, idx) => (
+                          <div key={idx} className={idx > 0 ? 'mt-1 pt-1 border-t border-slate-700/20' : ''}>
+                            <strong>{item.product || <span className="rose-text">Unknown Product</span>}</strong>
+                            <small className="mono block text-muted">{item.raw_sku}</small>
+                          </div>
+                        ))}
+                      </td>
+                      <td>
+                        {l.items.map((item, idx) => (
+                          <div key={idx}>
+                            <strong>{item.quantity}</strong>
+                          </div>
+                        ))}
+                      </td>
+                      <td>
+                        <span className="worker-name">
+                          <i
+                            className={`dot ${
+                              worker === 'Kartik Da' ? 'teal' : 'blue'
+                            }`}
+                          />
+                          {worker}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex flex-col gap-1 items-start">
+                          {l.mismatch ? (
+                            <StatusBadge value="Mismatch" />
+                          ) : l.duplicate ? (
+                            <StatusBadge value="Duplicate" />
+                          ) : isUnknown ? (
+                            <StatusBadge value="Unknown" />
+                          ) : (
+                            <StatusBadge value="Mapped" />
+                          )}
+
+                          {l.duplicate && !l.mismatch && (
+                            <small className="table-note">Counted previously</small>
+                          )}
+                          {l.mismatch && (
+                            <small className="text-rose-500 font-semibold">SKU mismatch with DB</small>
+                          )}
+                        </div>
+                      </td>
+                      <td className="text-right">
+                        {isUnknown ? (
+                          <button
+                            className="small-button"
+                            id={`train-btn-${l.page}`}
+                            onClick={() =>
+                              setTrainItem({
+                                raw_sku: l.items.find((i) => i.mapping_status === 'unknown')?.raw_sku || '',
+                                description: l.items.find((i) => i.mapping_status === 'unknown')?.description || '',
+                              })
+                            }
+                          >
+                            Train SKU
+                          </button>
+                        ) : l.mismatch ? (
+                          <button className="small-button" onClick={() => setMismatchModalItem(l)}>
+                            Review Mismatch
+                          </button>
+                        ) : l.duplicate ? (
+                          <button className="small-button" onClick={() => setDuplicateModalItem(l)}>
+                            Reprint Info
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted">Ready</span>
                         )}
-                        {l.mismatch && (
-                          <small className="text-rose-500 font-semibold">SKU mismatch with DB</small>
-                        )}
-                      </div>
-                    </td>
-                    <td className="text-right">
-                      {isUnknown ? (
-                        <button
-                          className="small-button"
-                          id={`train-btn-${l.page}`}
-                          onClick={() =>
-                            setTrainItem({
-                              raw_sku: l.items.find((i) => i.mapping_status === 'unknown')?.raw_sku || '',
-                              description: l.items.find((i) => i.mapping_status === 'unknown')?.description || '',
-                            })
-                          }
-                        >
-                          Train SKU
-                        </button>
-                      ) : l.mismatch ? (
-                        <button className="small-button" onClick={() => setMismatchModalItem(l)}>
-                          Review Mismatch
-                        </button>
-                      ) : l.duplicate ? (
-                        <button className="small-button" onClick={() => setDuplicateModalItem(l)}>
-                          Reprint Info
-                        </button>
-                      ) : (
-                        <span className="text-xs text-muted">Ready</span>
-                      )}
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+                  </React.Fragment>
                 )
               })}
             </tbody>
@@ -1997,7 +2146,7 @@ function ProcessLabelsView({ go, showToast }: any) {
             </button>
 
             <button className="button dark-button" id="print-action-btn" onClick={handlePrint}>
-              <Printer size={16} /> Print cropped PDF
+              <Printer size={16} /> Print cropped PDF ({sortModeLabel(sortMode).split(' ')[0]})
             </button>
           </div>
         </div>

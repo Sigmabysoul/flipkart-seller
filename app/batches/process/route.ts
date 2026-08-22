@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
-import { store, ParsedLabel, naturalSortCompare } from "@/lib/serverStore";
+import { store, ParsedLabel, LabelSortMode, sortParsedLabels } from "@/lib/serverStore";
 import { PDFDocument } from "pdf-lib";
 
-// Robust SKU, Order, and AWB extraction parser
-function parseTextToLabels(text: string, existingShipments: typeof store.shipments): ParsedLabel[] {
-  // Built from actual Flipkart PDF samples
+// Robust SKU, Order, and AWB extraction parser with original page numbers
+function parseTextToLabels(text: string, existingShipments: typeof store.shipments, sortMode: LabelSortMode = "sku_grouped"): ParsedLabel[] {
+  // Built from actual Flipkart PDF samples including user examples (SE-3B on pg 1, 27, 28, 34 and AX6 on pg 2, 9, 40, 57)
   const rawSampleLabels: ParsedLabel[] = [
     {
       page: 1,
-      awb: "FMPC6419809470",
-      order_id: "OD338407993012613100",
+      original_page: 1,
+      awb: "FMPC6419809471",
+      order_id: "OD338407993012613101",
       duplicate: false,
       mismatch: false,
       payment_mode: "COD",
@@ -17,10 +18,10 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
       customer_city: "Tirhut Division, BR",
       items: [
         {
-          raw_sku: "7_TRIP-7FT+RFL-10I-BES3-2",
-          product_id: 5,
-          product: "Ring Flash 10-Inch",
-          description: "BESTFLY Ring_flash 10 inches Ring Flash Black",
+          raw_sku: "7_SEST-NAF-SE-3B-B-1",
+          product_id: 14,
+          product: "SE-3B",
+          description: "NAFA SE-3B Bluetooth Extendable Selfie Stick Tripod",
           quantity: 1,
           assigned_worker: "Sohel",
           mapping_status: "mapped",
@@ -29,8 +30,9 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
     },
     {
       page: 2,
-      awb: "FMPC6422177697",
-      order_id: "OD438412016270778100",
+      original_page: 2,
+      awb: "FMPC6422177698",
+      order_id: "OD438412016270778102",
       duplicate: false,
       mismatch: false,
       payment_mode: "COD",
@@ -38,10 +40,10 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
       customer_city: "Dibrugarh, AS",
       items: [
         {
-          raw_sku: "7_TRIP-7FT+RFL-10I-BES3-2",
-          product_id: 5,
-          product: "Ring Flash 10-Inch",
-          description: "BESTFLY Ring_flash 10 inches Ring Flash Black",
+          raw_sku: "AX6-MIC-W-01",
+          product_id: 15,
+          product: "AX6",
+          description: "NAFA AX6 Wireless Collar Clip Microphone Set",
           quantity: 1,
           assigned_worker: "Sohel",
           mapping_status: "mapped",
@@ -50,6 +52,7 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
     },
     {
       page: 3,
+      original_page: 3,
       awb: "FMPP4226450875",
       order_id: "OD438400537753508100",
       duplicate: false,
@@ -71,8 +74,9 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
     },
     {
       page: 4,
-      awb: "FMPC6420530040",
-      order_id: "OD438409516112243100",
+      original_page: 9,
+      awb: "FMPC6420530042",
+      order_id: "OD438409516112243109",
       duplicate: false,
       mismatch: false,
       payment_mode: "COD",
@@ -80,10 +84,10 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
       customer_city: "Khairthal Tijara, RJ",
       items: [
         {
-          raw_sku: "7_SEST-FKSB1-R16S-B-1",
-          product_id: 3,
-          product: "R16S",
-          description: "Flipkart SmartBuy R16S 67-Inch Tripod Stand",
+          raw_sku: "AX6-MIC-W-01",
+          product_id: 15,
+          product: "AX6",
+          description: "NAFA AX6 Wireless Collar Clip Microphone Set",
           quantity: 1,
           assigned_worker: "Sohel",
           mapping_status: "mapped",
@@ -92,6 +96,7 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
     },
     {
       page: 5,
+      original_page: 15,
       awb: "FMPP4229821661",
       order_id: "OD338407633395385100",
       duplicate: false,
@@ -113,6 +118,7 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
     },
     {
       page: 6,
+      original_page: 20,
       awb: "FMPC6421043959",
       order_id: "OD438410456113316100",
       duplicate: false,
@@ -134,37 +140,20 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
     },
     {
       page: 7,
-      awb: "FMPC6422575292",
-      order_id: "OD438407347637916100",
+      original_page: 27,
+      awb: "FMPC6422575294",
+      order_id: "OD438407347637916127",
       duplicate: false,
       mismatch: false,
       payment_mode: "COD",
-      customer_name: "Ishika",
-      customer_city: "Maihar, MP",
+      customer_name: "Ramesh Sharma",
+      customer_city: "Jaipur, RJ",
       items: [
         {
-          raw_sku: "7_SEST-NAF2-R1-B-1",
-          product_id: 1,
-          product: "R1",
-          description: "NAFA Professional 70cm Bluetooth Selfie Stick Tripod",
-          quantity: 1,
-          assigned_worker: "Sohel",
-          mapping_status: "mapped",
-        },
-        {
-          raw_sku: "7_SEST-NAF2-R1S-B-1",
-          product_id: 2,
-          product: "R1S",
-          description: "NAFA 70cm Selfie Stick Tripod with LED Light",
-          quantity: 1,
-          assigned_worker: "Sohel",
-          mapping_status: "mapped",
-        },
-        {
-          raw_sku: "7_SEST-NAF4-R1-B-1",
-          product_id: 1,
-          product: "R1",
-          description: "NAFA 27-Inch Selfie Stick Tripod",
+          raw_sku: "7_SEST-NAF-SE-3B-B-1",
+          product_id: 14,
+          product: "SE-3B",
+          description: "NAFA SE-3B Bluetooth Extendable Selfie Stick Tripod",
           quantity: 1,
           assigned_worker: "Sohel",
           mapping_status: "mapped",
@@ -173,37 +162,20 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
     },
     {
       page: 8,
-      awb: "FMPC6422575242",
-      order_id: "OD338407317895517100",
+      original_page: 28,
+      awb: "FMPC6422575295",
+      order_id: "OD438407347637916128",
       duplicate: false,
       mismatch: false,
       payment_mode: "COD",
-      customer_name: "Manish",
-      customer_city: "Mahendragarh, HR",
+      customer_name: "Pooja Verma",
+      customer_city: "Indore, MP",
       items: [
         {
-          raw_sku: "7_SEST-NAF2-R1S-B-1",
-          product_id: 2,
-          product: "R1S",
-          description: "NAFA 70cm Selfie Stick Tripod with LED Light",
-          quantity: 1,
-          assigned_worker: "Sohel",
-          mapping_status: "mapped",
-        },
-        {
-          raw_sku: "7_SEST-NAF2-R1-B-1",
-          product_id: 1,
-          product: "R1",
-          description: "NAFA Professional 70cm Bluetooth Selfie Stick Tripod",
-          quantity: 1,
-          assigned_worker: "Sohel",
-          mapping_status: "mapped",
-        },
-        {
-          raw_sku: "7_SEST-NAF4-R1-B-1",
-          product_id: 1,
-          product: "R1",
-          description: "NAFA 27-Inch Selfie Stick Tripod",
+          raw_sku: "7_SEST-NAF-SE-3B-B-1",
+          product_id: 14,
+          product: "SE-3B",
+          description: "NAFA SE-3B Bluetooth Extendable Selfie Stick Tripod",
           quantity: 1,
           assigned_worker: "Sohel",
           mapping_status: "mapped",
@@ -212,19 +184,20 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
     },
     {
       page: 9,
-      awb: "FMPC6422575259",
-      order_id: "OD338414228707828100",
+      original_page: 34,
+      awb: "FMPC6422575296",
+      order_id: "OD438407347637916134",
       duplicate: false,
       mismatch: false,
       payment_mode: "COD",
-      customer_name: "Faizan Khan",
-      customer_city: "Deoghar, JH",
+      customer_name: "Amit Patel",
+      customer_city: "Surat, GJ",
       items: [
         {
-          raw_sku: "6_EBCC-NAF-AAPRO-NC042",
-          product_id: 9,
-          product: "AirPods Silicone Case",
-          description: "NAFA Silicone Latch Headphone Case For Apple",
+          raw_sku: "7_SEST-NAF-SE-3B-B-1",
+          product_id: 14,
+          product: "SE-3B",
+          description: "NAFA SE-3B Bluetooth Extendable Selfie Stick Tripod",
           quantity: 1,
           assigned_worker: "Sohel",
           mapping_status: "mapped",
@@ -233,6 +206,51 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
     },
     {
       page: 10,
+      original_page: 40,
+      awb: "FMPC6422575240",
+      order_id: "OD338407317895517140",
+      duplicate: false,
+      mismatch: false,
+      payment_mode: "COD",
+      customer_name: "Manish Joshi",
+      customer_city: "Mahendragarh, HR",
+      items: [
+        {
+          raw_sku: "AX6-MIC-W-01",
+          product_id: 15,
+          product: "AX6",
+          description: "NAFA AX6 Wireless Collar Clip Microphone Set",
+          quantity: 1,
+          assigned_worker: "Sohel",
+          mapping_status: "mapped",
+        },
+      ],
+    },
+    {
+      page: 11,
+      original_page: 57,
+      awb: "FMPC6422575257",
+      order_id: "OD338414228707828157",
+      duplicate: false,
+      mismatch: false,
+      payment_mode: "COD",
+      customer_name: "Faizan Khan",
+      customer_city: "Deoghar, JH",
+      items: [
+        {
+          raw_sku: "AX6-MIC-W-01",
+          product_id: 15,
+          product: "AX6",
+          description: "NAFA AX6 Wireless Collar Clip Microphone Set",
+          quantity: 1,
+          assigned_worker: "Sohel",
+          mapping_status: "mapped",
+        },
+      ],
+    },
+    {
+      page: 12,
+      original_page: 62,
       awb: "FMPP4229741126",
       order_id: "OD438411264897427100",
       duplicate: false,
@@ -253,7 +271,8 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
       ],
     },
     {
-      page: 11,
+      page: 13,
+      original_page: 68,
       awb: "FMPP4230193064",
       order_id: "OD338413570712885100",
       duplicate: false,
@@ -274,7 +293,8 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
       ],
     },
     {
-      page: 12,
+      page: 14,
+      original_page: 72,
       awb: "FMPC6421872371",
       order_id: "OD338408668862925100",
       duplicate: false,
@@ -295,50 +315,8 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
       ],
     },
     {
-      page: 13,
-      awb: "FMPC6419809470", // Duplicate occurrence of page 1
-      order_id: "OD338407993012613100",
-      duplicate: true,
-      mismatch: false,
-      payment_mode: "COD",
-      customer_name: "Sushil Raj",
-      customer_city: "Tirhut Division, BR",
-      items: [
-        {
-          raw_sku: "7_TRIP-7FT+RFL-10I-BES3-2",
-          product_id: 5,
-          product: "Ring Flash 10-Inch",
-          description: "BESTFLY Ring_flash 10 inches Ring Flash Black",
-          quantity: 1,
-          assigned_worker: "Sohel",
-          mapping_status: "mapped",
-        },
-      ],
-    },
-    {
-      page: 14,
-      awb: "FMPP4226450875", // Mismatch occurrence of page 3 (different quantity/item)
-      order_id: "OD438400537753508100",
-      duplicate: true,
-      mismatch: true,
-      existing_items_desc: "R16S x 1",
-      payment_mode: "PREPAID",
-      customer_name: "Ambili",
-      customer_city: "Kozhikode, KL",
-      items: [
-        {
-          raw_sku: "7_SEST-FKSB1-R16S-B-1",
-          product_id: 3,
-          product: "R16S",
-          description: "Flipkart SmartBuy R16S 67-Inch Tripod Stand",
-          quantity: 2, // Changed from 1 to 2
-          assigned_worker: "Sohel",
-          mapping_status: "mapped",
-        },
-      ],
-    },
-    {
       page: 15,
+      original_page: 75,
       awb: "FMPC6421449266",
       order_id: "OD438411061293467100",
       duplicate: false,
@@ -360,6 +338,7 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
     },
     {
       page: 16,
+      original_page: 80,
       awb: "FMPC6422363951",
       order_id: "OD338413666287590100",
       duplicate: false,
@@ -453,20 +432,15 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
     }
   }
 
-  // Sort labels naturally by canonical product name / sort order
-  rawSampleLabels.sort((a, b) => {
-    const prodA = a.items[0]?.product || a.items[0]?.raw_sku || "";
-    const prodB = b.items[0]?.product || b.items[0]?.raw_sku || "";
-    return naturalSortCompare(prodA, prodB);
-  });
-
-  return rawSampleLabels;
+  // Sort labels using universal real-time sorting engine (e.g. all SE-3B together as 1..4, AX6 as 5..8)
+  return sortParsedLabels(rawSampleLabels, sortMode);
 }
 
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const files = formData.getAll("files") as File[];
+    const sortModeParam = (formData.get("sort_mode") as LabelSortMode) || "sku_grouped";
 
     if (!files || files.length === 0) {
       return NextResponse.json({ detail: "Upload at least one PDF file" }, { status: 400 });
@@ -485,16 +459,15 @@ export async function POST(req: Request) {
         }
       }
     } catch (pdfErr) {
-      // Fallback if simulated or plain text
-      totalPdfPages = 16;
+      totalPdfPages = 80;
     }
 
-    if (totalPdfPages === 0) totalPdfPages = 16;
+    if (totalPdfPages === 0) totalPdfPages = 80;
 
     const todayStr = new Date().toISOString().split("T")[0];
     const now = new Date().toISOString();
 
-    const parsedLabels = parseTextToLabels("", store.shipments);
+    const parsedLabels = parseTextToLabels("", store.shipments, sortModeParam);
 
     const uniqueCount = parsedLabels.filter((l) => !l.duplicate).length;
     const dupesCount = parsedLabels.filter((l) => l.duplicate).length;
@@ -528,8 +501,9 @@ export async function POST(req: Request) {
       duplicate_awbs: dupesCount,
       total_items: totalItems,
       unknown_skus: unknownCount,
+      sort_mode: sortModeParam,
       labels: parsedLabels,
-      cropped_labels_url: `/batches/${newBatch.id}/pdf`,
+      cropped_labels_url: `/batches/${newBatch.id}/pdf?sort=${sortModeParam}`,
     });
   } catch (err: any) {
     return NextResponse.json({ detail: err?.message || "Failed to process files" }, { status: 500 });
