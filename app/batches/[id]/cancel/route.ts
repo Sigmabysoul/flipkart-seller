@@ -8,7 +8,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!batch) return NextResponse.json({ detail: "Batch not found" }, { status: 404 });
 
   if (batch.status === "confirmed") {
-    return NextResponse.json({ detail: "Confirmed batches cannot be cancelled" }, { status: 409 });
+    return NextResponse.json({ detail: "Confirmed batches cannot be cancelled. Use Undo instead." }, { status: 409 });
   }
 
   batch.status = "cancelled";
