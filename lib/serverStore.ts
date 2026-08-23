@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 
+const DATA_DIR = path.join(process.cwd(), 'data');
+const DB_FILE = path.join(DATA_DIR, 'db.json');
+const SKU_RULES_FILE = path.join(DATA_DIR, 'sku-rules.json');
+const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
+
 export interface Worker {
   id: number;
   name: string;
@@ -816,11 +821,6 @@ export function initStore(): StoreData {
 }
 
 export const store: StoreData = initStore();
-
-const DATA_DIR = path.join(process.cwd(), 'data');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
-const SKU_RULES_FILE = path.join(DATA_DIR, 'sku-rules.json');
-const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
 
 export function saveStoreToDisk(currentStore: StoreData = store): boolean {
   try {
