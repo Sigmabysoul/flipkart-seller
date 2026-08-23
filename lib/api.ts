@@ -3,12 +3,61 @@ import { errorLogger, ErrorLogEntry, LogLevel, ApiErrorLogContext } from "./logg
 export { errorLogger }
 export type { ErrorLogEntry, LogLevel, ApiErrorLogContext }
 
-// Always use relative routes in browser if NEXT_PUBLIC_API_URL is undefined or localhost
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || ""
-const API_URL = typeof window !== 'undefined' && rawApiUrl.includes('localhost') ? "" : rawApiUrl
+// Always use relative routes in browser if NEXT_PUBLIC_API_URL is undefined, invalid, or localhost
+export function sanitizeApiBaseUrl(raw?: string): { url: string; isValid: boolean; reason?: string } {
+  const trimmed = (raw || '').trim()
+  if (!trimmed) {
+    return { url: '', isValid: true }
+  }
+  
+  // Check if it's an email/handle like "user@1234" or non-URL string
+  if (trimmed.includes('@') && !trimmed.startsWith('http')) {
+    return {
+      url: '',
+      isValid: false,
+      reason: `Invalid format: "${trimmed}" looks like a username/account ID, not a valid HTTP(S) URL. Safely falling back to same-origin routes.`
+    }
+  }
+
+  // Must start with http:// or https://
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return {
+      url: '',
+      isValid: false,
+      reason: `Invalid protocol: "${trimmed}" does not start with http:// or https://. Safely falling back to same-origin routes.`
+    }
+  }
+
+  try {
+    const parsed = new URL(trimmed)
+    if (typeof window !== 'undefined' && parsed.hostname === 'localhost' && !window.location.hostname.includes('localhost')) {
+      return {
+        url: '',
+        isValid: false,
+        reason: 'Localhost URL detected while running in cloud environment. Auto-switching to same-origin routes.'
+      }
+    }
+    return { url: trimmed.replace(/\/+$/, ''), isValid: true }
+  } catch (err: any) {
+    return {
+      url: '',
+      isValid: false,
+      reason: `Malformed URL format: ${err?.message || 'Invalid URI'}`
+    }
+  }
+}
+
+const apiConfig = sanitizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL)
+// When an external host URL is configured, route via /api/proxy to bypass browser CORS restrictions server-side
+const USE_PROXY_FOR_REMOTE = typeof window !== 'undefined' && apiConfig.isValid && apiConfig.url.startsWith('http')
+const API_URL = USE_PROXY_FOR_REMOTE ? '/api/proxy' : apiConfig.url
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const url = `${API_URL}${path}`
+  // Prevent double prefixing if path already includes /api/proxy
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  const url = API_URL.endsWith('/api/proxy') && cleanPath.startsWith('/api/proxy')
+    ? cleanPath
+    : `${API_URL}${cleanPath}`
   const method = options?.method || "GET"
   const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now()
 

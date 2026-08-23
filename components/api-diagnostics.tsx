@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { errorLogger, ErrorLogEntry } from '@/lib/logger'
+import { sanitizeApiBaseUrl } from '@/lib/api'
 import {
   Activity,
   CheckCircle2,
@@ -24,7 +25,9 @@ import {
   Info,
   Bug,
   Trash2,
-  Download
+  Download,
+  ShieldAlert,
+  HelpCircle
 } from 'lucide-react'
 
 export interface DiagnosticEndpointResult {
@@ -71,15 +74,17 @@ export function ApiDiagnostics({
     return () => unsubscribe()
   }, [])
 
-  // Environment variable evaluation
-  const rawEnvApiUrl = process.env.NEXT_PUBLIC_API_URL
-  const isEnvDefined = typeof rawEnvApiUrl === 'string' && rawEnvApiUrl.trim().length > 0
+  // Environment variable evaluation with sanitization
+  const rawEnvApiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+  const isEnvDefined = rawEnvApiUrl.trim().length > 0
+  const envStatus = sanitizeApiBaseUrl(rawEnvApiUrl)
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : ''
 
   const runAllDiagnostics = useCallback(async () => {
     setIsRunning(true)
     const endpointsToTest = [
       { id: 'health', name: 'API Health Check', path: '/health' },
+      { id: 'proxy-health', name: 'CORS Proxy Gateway', path: '/api/proxy/health' },
       { id: 'dashboard', name: 'Dashboard Analytics', path: '/dashboard?date=2026-08-22' },
       { id: 'products', name: 'Product Catalog', path: '/products' },
       { id: 'workers', name: 'Workers Allocation', path: '/workers' },
@@ -91,10 +96,11 @@ export function ApiDiagnostics({
 
     for (const ep of endpointsToTest) {
       const startTime = performance.now()
-      // If NEXT_PUBLIC_API_URL is set, use it; otherwise use relative path
-      const base = isEnvDefined ? rawEnvApiUrl!.replace(/\/+$/, '') : ''
+      // If path is /api/proxy/..., always test via relative origin
+      // Otherwise use sanitized base URL (falls back to relative same-origin if invalid/unset)
+      const isProxyPath = ep.path.startsWith('/api/proxy')
+      const base = isProxyPath ? '' : (envStatus.url && envStatus.isValid ? envStatus.url : '')
       const targetUrl = `${base}${ep.path}`
-
       const timestamp = new Date().toLocaleTimeString()
 
       try {
@@ -198,7 +204,7 @@ export function ApiDiagnostics({
       setSelectedEndpointId(newResults[0].id)
     }
     setIsRunning(false)
-  }, [isEnvDefined, rawEnvApiUrl, selectedEndpointId])
+  }, [envStatus.url, isEnvDefined, rawEnvApiUrl, selectedEndpointId])
 
   // Run on mount
   useEffect(() => {
@@ -317,21 +323,47 @@ export function ApiDiagnostics({
         {isOpen && (
           <div className="mt-4 pt-4 border-t border-border/80 text-foreground animate-in fade-in duration-200">
             {/* Environment Summary Cards */}
+            {!envStatus.isValid && isEnvDefined && (
+              <div className="mb-4 p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 rounded-xl text-amber-950 dark:text-amber-100 flex items-start gap-3 shadow-xs">
+                <ShieldAlert size={20} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-xs space-y-1">
+                  <div className="font-bold flex items-center gap-2 text-amber-900 dark:text-amber-200">
+                    <span>Non-URL Value Detected in NEXT_PUBLIC_API_URL</span>
+                    <span className="text-[10px] uppercase tracking-wider bg-amber-200/80 dark:bg-amber-900/80 px-2 py-0.5 rounded font-mono font-semibold">
+                      Self-Healing Applied
+                    </span>
+                  </div>
+                  <p className="text-amber-800 dark:text-amber-300 leading-relaxed">
+                    The environment variable <code className="font-mono px-1 py-0.5 bg-amber-200/50 dark:bg-amber-900/40 rounded">NEXT_PUBLIC_API_URL</code> is currently set to <code className="font-mono font-bold px-1 py-0.5 bg-black/10 dark:bg-white/10 rounded">"{rawEnvApiUrl}"</code>, which is not a valid HTTP URL.
+                  </p>
+                  <p className="text-amber-700 dark:text-amber-400 text-[11px] leading-relaxed">
+                    <strong>Automatic Fix:</strong> The app automatically ignores this invalid prefix and routes requests directly to the built-in Next.js endpoints (<code className="font-mono">/health</code>, <code className="font-mono">/dashboard</code>, <code className="font-mono">/products</code>, etc.). To remove this warning, you can clear the variable in Project Settings.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
               <div className="p-3 bg-card rounded-lg border border-border">
                 <div className="flex items-center justify-between text-xs text-muted mb-1">
                   <span className="font-semibold flex items-center gap-1.5">
                     <Globe size={13} className="text-blue-500" /> NEXT_PUBLIC_API_URL
                   </span>
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isEnvDefined ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
-                    {isEnvDefined ? 'CONFIGURED' : 'UNSET (DEFAULT)'}
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                    !envStatus.isValid && isEnvDefined
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                      : isEnvDefined
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                  }`}>
+                    {!envStatus.isValid && isEnvDefined ? 'INVALID (IGNORED)' : isEnvDefined ? 'CONFIGURED' : 'UNSET (SAME-ORIGIN)'}
                   </span>
                 </div>
                 <div className="font-mono text-xs font-bold truncate text-foreground" title={rawEnvApiUrl || 'Relative Same-Origin'}>
-                  {isEnvDefined ? rawEnvApiUrl : 'Relative paths (e.g. /dashboard)'}
+                  {envStatus.url || '(Same-Origin Relative /api)'}
                 </div>
                 <p className="text-[11px] text-muted mt-1 leading-tight">
-                  {isEnvDefined
+                  {envStatus.url
                     ? 'Browser fetches route to this explicit remote host URL.'
                     : 'Browser calls standard server API routes hosted on current domain.'}
                 </p>

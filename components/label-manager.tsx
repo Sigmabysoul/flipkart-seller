@@ -264,6 +264,22 @@ function StatusBadge({ value }: { value: string }) {
   return <Badge kind={kind}>{value}</Badge>
 }
 
+// Global helper to revalidate dashboard and workspace data after any changes
+export function revalidateWarehouseData() {
+  mutate(
+    (key) =>
+      typeof key === 'string' &&
+      (key.startsWith('/dashboard') ||
+        key.startsWith('/training') ||
+        key.startsWith('/history') ||
+        key.startsWith('/products') ||
+        key.startsWith('/workers') ||
+        key.startsWith('/categories')),
+    undefined,
+    { revalidate: true }
+  )
+}
+
 // Global helper to generate and download Warehouse Dispatch CSV
 export function downloadWarehouseDispatchCSV(dash: any, selectedDate: string) {
   const lines: string[] = []
@@ -338,10 +354,10 @@ export default function LabelManager() {
     setShowNotifications(false)
   }
 
-  // Live unknown count for nav badge
-  const { data: trainStats } = useSWR('/training/stats', getTrainingStats, { refreshInterval: 5000 })
-  // Live shift dashboard data for global progress bar metrics
-  const { data: dashData } = useSWR(`/dashboard?date=${selectedDate}`, () => getDashboard(selectedDate), { refreshInterval: 5000 })
+  // Live unknown count for nav badge (2m refresh cycle)
+  const { data: trainStats } = useSWR('/training/stats', getTrainingStats, { refreshInterval: 120000 })
+  // Live shift dashboard data for global progress bar metrics (2m refresh cycle)
+  const { data: dashData } = useSWR(`/dashboard?date=${selectedDate}`, () => getDashboard(selectedDate), { refreshInterval: 120000 })
 
   // Global Actions
   const handleProcessLabelGlobal = () => {
@@ -382,8 +398,7 @@ export default function LabelManager() {
         setActiveBatch({ ...activeBatch, status: 'confirmed' })
       }
       showToast(`Batch #${batchId} successfully confirmed into warehouse accounting!`)
-      mutate(`/dashboard?date=${selectedDate}`)
-      mutate('/training/stats')
+      revalidateWarehouseData()
     } catch (err: any) {
       showToast(`Confirm failed: ${err.message}`)
     }
@@ -468,9 +483,7 @@ export default function LabelManager() {
       // 'R' or Alt+R -> Refresh Metrics
       if ((key === 'r' && !isInput) || (e.altKey && key === 'r')) {
         e.preventDefault()
-        mutate(`/dashboard?date=${selectedDate}`)
-        mutate('/training/stats')
-        mutate('/history')
+        revalidateWarehouseData()
         showToast('Refreshed warehouse metrics [R]')
         return
       }
@@ -859,7 +872,7 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
   const { data: dash, mutate: refreshDash, isLoading } = useSWR(
     `/dashboard?date=${selectedDate}`,
     () => getDashboard(selectedDate),
-    { refreshInterval: autoRefresh ? 30000 : 0 }
+    { refreshInterval: autoRefresh ? 120000 : 0 }
   )
 
   const [productFilter, setProductFilter] = useState('')
@@ -1014,12 +1027,12 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
               onClick={() => {
                 const nextState = !autoRefresh
                 setAutoRefresh(nextState)
-                showToast(`Auto-refresh (30s) ${nextState ? 'enabled' : 'disabled'}`)
+                showToast(`Auto-refresh (2m) ${nextState ? 'enabled' : 'disabled'}`)
               }}
-              title={autoRefresh ? 'Auto-refresh active (updates every 30s). Click to pause.' : 'Auto-refresh paused. Click to enable 30s interval.'}
+              title={autoRefresh ? 'Auto-refresh active (updates every 2 mins). Click to pause.' : 'Auto-refresh paused. Click to enable 2m interval.'}
             >
               <span className={`w-2 h-2 rounded-full ${autoRefresh ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-              Auto-refresh: {autoRefresh ? '30s On' : 'Off'}
+              Auto-refresh: {autoRefresh ? '2m On' : 'Off'}
             </button>
             <button
               className="button secondary"
@@ -1776,7 +1789,7 @@ function KartikStationView({ go, selectedDate, setSelectedDate, showToast }: any
   const { data: dash, mutate: refreshDash, isLoading } = useSWR(
     `/dashboard?date=${selectedDate}`,
     () => getDashboard(selectedDate),
-    { refreshInterval: 5000 }
+    { refreshInterval: 120000 }
   )
 
   const [searchTerm, setSearchTerm] = useState('')
@@ -2535,7 +2548,7 @@ function MyStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
   const { data: dash, mutate: refreshDash, isLoading } = useSWR(
     `/dashboard?date=${selectedDate}`,
     () => getDashboard(selectedDate),
-    { refreshInterval: 5000 }
+    { refreshInterval: 120000 }
   )
 
   const [searchOrder, setSearchOrder] = useState('')
@@ -3146,7 +3159,7 @@ function ProcessLabelsView({
       setCurrentStep(7)
       setBatchData(result)
       showToast(`Batch #${result.batch_id} ready for review: ${result.unique_awbs} unique AWBs`)
-      mutate('/training/stats')
+      revalidateWarehouseData()
     } catch (err: any) {
       clearInterval(interval)
       alert(err?.message || 'Failed to process PDF')
@@ -3162,8 +3175,7 @@ function ProcessLabelsView({
       await confirmBatch(batchData.batch_id)
       setBatchData({ ...batchData, status: 'confirmed' })
       showToast(`Batch #${batchData.batch_id} successfully confirmed into warehouse accounting!`)
-      mutate(`/dashboard?date=${batchData.processing_date}`)
-      mutate('/training/stats')
+      revalidateWarehouseData()
     } catch (err: any) {
       alert(err.message)
     } finally {
@@ -3177,7 +3189,7 @@ function ProcessLabelsView({
       await recordPrintEvent(batchData.batch_id, 'Sohel', 'full_batch')
       window.open(`/batches/${batchData.batch_id}/pdf?sort=${sortMode}`, '_blank')
       showToast(`Print opened in real-time sequence (${sortModeLabel(sortMode)}).`)
-      mutate(`/dashboard?date=${batchData.processing_date}`)
+      revalidateWarehouseData()
     } catch (err: any) {
       alert(err.message)
     }
@@ -3902,6 +3914,7 @@ function ProductsView({ showToast }: any) {
               try {
                 await createCategory({ name: name.trim() })
                 refreshCategories()
+                revalidateWarehouseData()
                 showToast(`Category "${name}" created.`)
               } catch (e: any) {
                 alert(e.message)
@@ -4010,6 +4023,7 @@ function ProductsView({ showToast }: any) {
                       if (window.confirm(`Deactivate product "${p.name}"?`)) {
                         await deleteProduct(p.id)
                         refreshProducts()
+                        revalidateWarehouseData()
                         showToast(`Product "${p.name}" deactivated.`)
                       }
                     }}
@@ -4035,6 +4049,7 @@ function ProductsView({ showToast }: any) {
           }}
           onSaved={() => {
             refreshProducts()
+            revalidateWarehouseData()
             showToast(editingProduct ? 'Product updated' : 'New product created')
             setDialog(null)
             setEditingProduct(null)
@@ -4076,6 +4091,7 @@ function TrainingCenterView({ showToast }: any) {
       refreshUnknowns()
       refreshStats()
       refreshHistory()
+      revalidateWarehouseData()
     } catch (err: any) {
       alert(err.message)
     }
@@ -4088,6 +4104,7 @@ function TrainingCenterView({ showToast }: any) {
       refreshUnknowns()
       refreshStats()
       refreshHistory()
+      revalidateWarehouseData()
     } catch (err: any) {
       alert(err.message)
     }
@@ -4401,6 +4418,7 @@ function TrainingCenterView({ showToast }: any) {
             refreshUnknowns()
             refreshStats()
             refreshHistory()
+            revalidateWarehouseData()
           }}
           onConflict={(conflict: any) => {
             setConflictItem(conflict)
@@ -4448,6 +4466,7 @@ function TrainingCenterView({ showToast }: any) {
                 refreshUnknowns()
                 refreshStats()
                 refreshHistory()
+                revalidateWarehouseData()
                 showToast(`Replaced mapping to ${conflictItem.new_product_name}`)
               }}
             >
@@ -4464,6 +4483,7 @@ function TrainingCenterView({ showToast }: any) {
           close={() => setRuleModalOpen(false)}
           onAdded={() => {
             refreshRules()
+            revalidateWarehouseData()
             setRuleModalOpen(false)
             showToast('Pattern rule added')
           }}
@@ -4696,6 +4716,7 @@ function SettingsView({ showToast }: any) {
       setNewWorkerName('')
       setNewWorkerPhone('')
       refreshWorkers()
+      revalidateWarehouseData()
       showToast(`Worker "${newWorkerName}" added.`)
     } catch (err: any) {
       alert(err.message)
@@ -4739,6 +4760,7 @@ function SettingsView({ showToast }: any) {
                       if (window.confirm(`Deactivate ${w.name}?`)) {
                         await deleteWorker(w.id)
                         refreshWorkers()
+                        revalidateWarehouseData()
                         showToast(`${w.name} deactivated`)
                       }
                     }}
@@ -4787,6 +4809,7 @@ function SettingsView({ showToast }: any) {
                     if (window.confirm(`Delete category ${c.name}?`)) {
                       await deleteCategory(c.id)
                       refreshCategories()
+                      revalidateWarehouseData()
                       showToast(`Category ${c.name} deleted`)
                     }
                   }}
