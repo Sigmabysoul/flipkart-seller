@@ -1,9 +1,25 @@
+import { errorLogger, ErrorLogEntry, LogLevel, ApiErrorLogContext } from "./logger"
+
+export { errorLogger }
+export type { ErrorLogEntry, LogLevel, ApiErrorLogContext }
+
 // Always use relative routes in browser if NEXT_PUBLIC_API_URL is undefined or localhost
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || ""
 const API_URL = typeof window !== 'undefined' && rawApiUrl.includes('localhost') ? "" : rawApiUrl
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_URL}${path}`
+  const method = options?.method || "GET"
+  const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now()
+
+  // Track breadcrumb for outbound request
+  errorLogger.addBreadcrumb({
+    category: 'http',
+    message: `${method} ${path}`,
+    data: { url, method },
+    level: 'info',
+  })
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -12,14 +28,44 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
         ...options?.headers,
       },
     })
+    
+    const latencyMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTime)
     const data = await response.json().catch(() => null)
+    
     if (!response.ok) {
       const errMsg = data?.detail || data?.error || data?.message || `API request failed with status ${response.status}`
-      throw new Error(errMsg)
+      const error = new Error(errMsg)
+      
+      // Log structured API error to console and Sentry (if enabled)
+      errorLogger.captureApiError({
+        endpoint: path,
+        method,
+        statusCode: response.status,
+        statusText: response.statusText,
+        latencyMs,
+        error,
+        requestBody: options?.body instanceof FormData ? '[FormData]' : options?.body,
+        responseData: data,
+      })
+
+      throw error
     }
+
     return data as T
   } catch (err: any) {
-    console.warn(`[API] fetch to ${path} failed:`, err?.message || err)
+    const latencyMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTime)
+    
+    // Only capture if not already captured by the non-ok response block
+    if (!err.logged) {
+      errorLogger.captureApiError({
+        endpoint: path,
+        method,
+        latencyMs,
+        error: err,
+        requestBody: options?.body instanceof FormData ? '[FormData]' : options?.body,
+      })
+    }
+
     throw err
   }
 }

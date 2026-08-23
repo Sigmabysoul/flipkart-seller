@@ -338,13 +338,34 @@ function getSnapshot(targetDate: string) {
       packcalc_boxes: packcalcBoxes,
       garbage_bag_total_labels: totalGarbageBagLabels,
       garbage_bag_total_units: totalGarbageBagUnits,
-      shipments: kartikShipments,
+      shipments: kartikShipments.map((s) => ({
+        awb_number: s.awb,
+        order_id: s.order_id,
+        product_name: s.items[0]?.product || s.items[0]?.raw_sku || 'Garbage Bag Roll',
+        quantity: s.items.reduce((sum, i) => sum + i.quantity, 0),
+        destination_city: s.customer_city || 'Regional Hub',
+        payment_mode: s.payment_mode || 'PREPAID',
+        print_status: 'printed',
+      })),
     },
     my_station: {
       total_labels: myShipments.length,
       total_items: Object.values(myProductsMap).reduce((s, p) => s + p.items, 0),
       orders: Object.values(myProductsMap).sort((a, b) => b.labels - a.labels),
-      shipments: myShipments,
+      shipments: myShipments.map((s) => {
+        const firstItem = s.items[0];
+        const prod = store.products.find((p) => p.name === firstItem?.product || p.id === firstItem?.product_id);
+        return {
+          awb_number: s.awb,
+          order_id: s.order_id,
+          product_name: firstItem?.product || firstItem?.raw_sku || 'Standard Product',
+          code: prod?.internal_code || firstItem?.raw_sku || 'PROD',
+          quantity: s.items.reduce((sum, i) => sum + i.quantity, 0),
+          destination_city: s.customer_city || 'Regional Hub',
+          payment_mode: s.payment_mode || 'PREPAID',
+          print_status: 'printed',
+        };
+      }),
     },
     shift_overview: {
       target_labels: totalCapacityLabels,

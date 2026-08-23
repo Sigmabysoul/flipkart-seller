@@ -96,6 +96,7 @@ import {
   ParsedLabelItem,
   ProcessBatchResponse,
 } from '@/lib/api'
+import { ApiDiagnostics } from './api-diagnostics'
 
 const nav = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -141,6 +142,117 @@ function PageHead({ eyebrow, title, description, action }: any) {
 function TableWrap({ children }: { children: React.ReactNode }) {
   return <div className="table-wrap"><table>{children}</table></div>
 }
+
+// ----------------------------------------------------------------------
+// SKELETON LOADING COMPONENTS
+// ----------------------------------------------------------------------
+export function Skeleton({ className = '' }: { className?: string }) {
+  return (
+    <div
+      className={`animate-pulse bg-slate-200 dark:bg-slate-800 rounded ${className}`}
+      role="status"
+      aria-label="Loading..."
+    />
+  )
+}
+
+export function ViewSkeleton({
+  title = 'Loading View...',
+  eyebrow = 'Warehouse Pipeline',
+  statCount = 4,
+}: {
+  title?: string
+  eyebrow?: string
+  statCount?: number
+}) {
+  return (
+    <div className="space-y-6 animate-pulse" aria-busy="true" aria-live="polite">
+      {/* Header Skeleton */}
+      <div className="page-head">
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-7 w-64" />
+          <Skeleton className="h-4 w-96 max-w-full" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-28" />
+          <Skeleton className="h-9 w-28" />
+        </div>
+      </div>
+
+      {/* Stats Cards Skeleton */}
+      <div className={`stats-grid ${statCount === 3 ? 'three' : ''}`}>
+        {Array.from({ length: statCount }).map((_, i) => (
+          <div key={i} className="stat-card">
+            <Skeleton className="w-9 h-9 rounded-lg shrink-0" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-6 w-24" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Main Grid / Panels Skeleton */}
+      <div className="two-col">
+        <div className="panel space-y-4">
+          <div className="flex justify-between items-center pb-2 border-b border-border">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+          <div className="space-y-3 pt-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex justify-between items-center py-2 border-b border-border/50">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-8 h-8 rounded-full" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+                <Skeleton className="h-5 w-16 rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel space-y-4">
+          <div className="flex justify-between items-center pb-2 border-b border-border">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+          <div className="space-y-3 pt-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2 py-1">
+                <div className="flex justify-between">
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-4 w-12" />
+                </div>
+                <Skeleton className="h-2 w-full rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Table Skeleton */}
+      <div className="panel space-y-4">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="h-8 w-44" />
+        </div>
+        <div className="space-y-3 pt-2">
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 
 function StatusBadge({ value }: { value: string }) {
   const v = value.toLowerCase()
@@ -743,10 +855,11 @@ export default function LabelManager() {
 // 1. DASHBOARD VIEW
 // ----------------------------------------------------------------------
 function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
+  const [autoRefresh, setAutoRefresh] = useState(true)
   const { data: dash, mutate: refreshDash, isLoading } = useSWR(
     `/dashboard?date=${selectedDate}`,
     () => getDashboard(selectedDate),
-    { refreshInterval: 5000 }
+    { refreshInterval: autoRefresh ? 30000 : 0 }
   )
 
   const [productFilter, setProductFilter] = useState('')
@@ -883,6 +996,10 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
     showToast(`Exported CSV report for ${selectedDate}`)
   }
 
+  if (isLoading && !dash) {
+    return <ViewSkeleton eyebrow={`Processing Date: ${selectedDate}`} title="Loading Warehouse Dashboard..." statCount={4} />
+  }
+
   return (
     <>
       <PageHead
@@ -891,6 +1008,19 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
         description={`Dispatched product volume, category breakdown, SKU stock-out, and recent batches for ${dateFormatted}.`}
         action={
           <div className="flex gap-2 flex-wrap items-center">
+            <button
+              className={`button secondary ${autoRefresh ? 'border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20' : 'text-muted'}`}
+              id="dash-auto-refresh-toggle-btn"
+              onClick={() => {
+                const nextState = !autoRefresh
+                setAutoRefresh(nextState)
+                showToast(`Auto-refresh (30s) ${nextState ? 'enabled' : 'disabled'}`)
+              }}
+              title={autoRefresh ? 'Auto-refresh active (updates every 30s). Click to pause.' : 'Auto-refresh paused. Click to enable 30s interval.'}
+            >
+              <span className={`w-2 h-2 rounded-full ${autoRefresh ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+              Auto-refresh: {autoRefresh ? '30s On' : 'Off'}
+            </button>
             <button
               className="button secondary"
               id="dash-export-csv-btn"
@@ -980,6 +1110,9 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
           </div>
         </div>
       </div>
+
+      {/* Real-Time API & NEXT_PUBLIC_API_URL Diagnostics */}
+      <ApiDiagnostics />
 
       {/* Top Level Metric Stats Grid */}
       <div className="stats-grid" id="main-stats-grid">
@@ -1741,8 +1874,8 @@ function KartikStationView({ go, selectedDate, setSelectedDate, showToast }: any
     plain_3bag: simGarbageLabels !== null ? Math.round(activeBagBase * 0.4) : (boxMap['plain-3bag'] ?? 12),
   }
 
-  // Shipments for Kartik Da
-  const shipmentsList = kartikData.shipments && kartikData.shipments.length > 0
+  // Shipments for Kartik Da (Normalized)
+  const rawShipments = kartikData.shipments && kartikData.shipments.length > 0
     ? kartikData.shipments
     : [
         { awb_number: 'FMPC22001', order_id: 'OD-GB-9901', product_name: 'Butter Paper Roll', quantity: 1, destination_city: 'Kolkata, WB', payment_mode: 'PREPAID', print_status: 'printed' },
@@ -1757,20 +1890,31 @@ function KartikStationView({ go, selectedDate, setSelectedDate, showToast }: any
         { awb_number: 'FMPC22010', order_id: 'OD-GB-9910', product_name: 'Garbage Bag Roll 19x21', quantity: 1, destination_city: 'Bhubaneswar, OD', payment_mode: 'COD', print_status: 'pending' },
       ]
 
+  const shipmentsList = rawShipments.map((s: any) => ({
+    awb_number: s.awb_number || s.awb || 'AWB-LIVE',
+    order_id: s.order_id || 'OD-LIVE',
+    product_name: s.product_name || s.items?.[0]?.product || s.items?.[0]?.raw_sku || 'Garbage Bag Roll',
+    quantity: s.quantity ?? (s.items?.reduce((sum: number, it: any) => sum + (it.quantity || 1), 0) || 1),
+    destination_city: s.destination_city || 'Regional Hub',
+    payment_mode: s.payment_mode || 'PREPAID',
+    print_status: s.print_status || 'printed',
+  }))
+
   // Filtered shipments
   const filteredShipments = shipmentsList.filter((s: any) => {
-    const matchesSearch =
-      !searchTerm ||
-      s.awb_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.order_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.destination_city?.toLowerCase().includes(searchTerm.toLowerCase())
+    const awb = (s.awb_number || '').toLowerCase()
+    const ord = (s.order_id || '').toLowerCase()
+    const prod = (s.product_name || '').toLowerCase()
+    const dest = (s.destination_city || '').toLowerCase()
+    const q = (searchTerm || '').toLowerCase()
+
+    const matchesSearch = !q || awb.includes(q) || ord.includes(q) || prod.includes(q) || dest.includes(q)
 
     const matchesCat =
       filterCategory === 'all' ||
-      (filterCategory === 'garbage' && s.product_name?.toLowerCase().includes('garbage')) ||
-      (filterCategory === 'butter' && s.product_name?.toLowerCase().includes('butter')) ||
-      (filterCategory === 'aluminium' && s.product_name?.toLowerCase().includes('aluminium'))
+      (filterCategory === 'garbage' && prod.includes('garbage')) ||
+      (filterCategory === 'butter' && prod.includes('butter')) ||
+      (filterCategory === 'aluminium' && prod.includes('aluminium'))
 
     return matchesSearch && matchesCat
   })
@@ -1841,6 +1985,10 @@ Product Summary:
     link.click()
     document.body.removeChild(link)
     showToast(`Exported Kartik Da's manifest for ${selectedDate}`)
+  }
+
+  if (isLoading && !dash) {
+    return <ViewSkeleton eyebrow={`Station 2 • Dedicated Packing Line`} title="Loading Kartik Da's Station..." statCount={4} />
   }
 
   return (
@@ -2337,8 +2485,8 @@ Product Summary:
                     </td>
                     <td>
                       <div className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full ${s.product_name.includes('Garbage') ? 'bg-teal-500' : s.product_name.includes('Butter') ? 'bg-amber-500' : 'bg-slate-400'}`} />
-                        <strong className="text-xs">{s.product_name}</strong>
+                        <span className={`w-2 h-2 rounded-full ${(s?.product_name || '').includes('Garbage') ? 'bg-teal-500' : (s?.product_name || '').includes('Butter') ? 'bg-amber-500' : 'bg-slate-400'}`} />
+                        <strong className="text-xs">{s?.product_name || 'Standard Item'}</strong>
                       </div>
                     </td>
                     <td>
@@ -2451,8 +2599,8 @@ function MyStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
     )
   })
 
-  // Shipments for My Station
-  const myShipmentsList = myData.shipments && myData.shipments.length > 0
+  // Shipments for My Station (Normalized)
+  const rawMyShipments = myData.shipments && myData.shipments.length > 0
     ? myData.shipments
     : [
         { awb_number: 'FMPC11001', order_id: 'OD-SH-8801', product_name: 'R1 Bluetooth Selfie Stick', code: 'R1', quantity: 1, destination_city: 'Mumbai, MH', payment_mode: 'PREPAID' },
@@ -2466,6 +2614,17 @@ function MyStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
         { awb_number: 'FMPC11009', order_id: 'OD-SH-8809', product_name: 'HideTheory Leather Wallet', code: 'HideTheory Leather Wallet', quantity: 1, destination_city: 'Chandigarh, PB', payment_mode: 'COD' },
         { awb_number: 'FMPC11010', order_id: 'OD-SH-8810', product_name: 'AirPods Silicone Armor Case', code: 'AirPods Silicone Case', quantity: 1, destination_city: 'Chennai, TN', payment_mode: 'PREPAID' },
       ]
+
+  const myShipmentsList = rawMyShipments.map((s: any) => ({
+    awb_number: s.awb_number || s.awb || 'AWB-LIVE',
+    order_id: s.order_id || 'OD-LIVE',
+    product_name: s.product_name || s.items?.[0]?.product || s.items?.[0]?.raw_sku || 'Standard Product',
+    code: s.code || s.items?.[0]?.raw_sku || 'PROD',
+    quantity: s.quantity ?? (s.items?.reduce((sum: number, it: any) => sum + (it.quantity || 1), 0) || 1),
+    destination_city: s.destination_city || 'Regional Hub',
+    payment_mode: s.payment_mode || 'PREPAID',
+    print_status: s.print_status || 'printed',
+  }))
 
   const togglePacked = (awb: string) => {
     setPackedAwbs(prev => ({ ...prev, [awb]: !prev[awb] }))
@@ -2507,6 +2666,10 @@ function MyStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
     link.click()
     document.body.removeChild(link)
     showToast(`Exported My Station report for ${selectedDate}`)
+  }
+
+  if (isLoading && !dash) {
+    return <ViewSkeleton eyebrow={`Station 1 • Main Catalogue Line`} title="Loading My Station (Sohel)..." statCount={4} />
   }
 
   return (
@@ -2745,11 +2908,11 @@ function MyStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
                     </td>
                     <td>
                       <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold font-mono">
-                        {s.code || s.product_name}
+                        {s?.code || s?.product_name || 'PROD'}
                       </span>
                     </td>
                     <td>
-                      <strong className="text-xs">{s.product_name}</strong>
+                      <strong className="text-xs">{s?.product_name || 'Standard Product'}</strong>
                     </td>
                     <td>
                       <strong className="text-xs font-bold font-mono">{s.quantity}x</strong>
