@@ -797,15 +797,15 @@ export function initStore(): StoreData {
     nextId: {
       worker: 3,
       category: 8,
-      product: 14,
-      mapping: 18,
+      product: 18,
+      mapping: 23,
       recipe: 4,
-      rule: 5,
+      rule: 10,
       history: 4,
       print: 2,
       batch: 2,
-      shipment: 9,
-      item: 11,
+      shipment: 18,
+      item: 21,
     },
   };
 
@@ -873,6 +873,29 @@ export function loadStoreFromDisk() {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.products) && Array.isArray(parsed.skuMappings)) {
+        parsed.nextId ||= {};
+        const collections = {
+          worker: parsed.workers,
+          category: parsed.categories,
+          product: parsed.products,
+          mapping: parsed.skuMappings,
+          recipe: parsed.packingRecipes,
+          rule: parsed.patternRules,
+          history: parsed.trainingHistory,
+          print: parsed.printEvents,
+          batch: parsed.batches,
+          shipment: parsed.shipments,
+          item: (parsed.shipments || []).flatMap((shipment: Shipment) => shipment.items || []),
+        };
+
+        for (const [counter, records] of Object.entries(collections)) {
+          const nextAvailableId = (records || []).reduce(
+            (maxId: number, record: { id?: number }) => Math.max(maxId, Number(record.id) || 0),
+            0,
+          ) + 1;
+          parsed.nextId[counter] = Math.max(Number(parsed.nextId[counter]) || 1, nextAvailableId);
+        }
+
         return parsed;
       }
     }

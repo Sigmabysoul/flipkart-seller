@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import { store, ParsedLabel, LabelSortMode, sortParsedLabels } from "@/lib/serverStore";
 import { PDFDocument } from "pdf-lib";
+import { PDFParse } from "pdf-parse";
 
 // Safe dynamic PDF parser wrapper
 async function parsePdfText(pdfBuffer: Buffer): Promise<string> {
+  const parser = new PDFParse({ data: pdfBuffer });
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse");
-    const parsedData = await pdfParse(pdfBuffer);
+    const parsedData = await parser.getText();
     return parsedData.text || "";
   } catch (e) {
     console.warn("pdf-parse extraction fallback:", e);
     return "";
+  } finally {
+    await parser.destroy();
   }
 }
 

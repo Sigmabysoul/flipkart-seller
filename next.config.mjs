@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  serverExternalPackages: ['pdf-parse'],
   allowedDevOrigins: [
     '127.0.0.1',
     'localhost',
