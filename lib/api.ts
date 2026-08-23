@@ -1,9 +1,74 @@
-// Always use relative routes in browser if NEXT_PUBLIC_API_URL is undefined or localhost
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || ""
-const API_URL = typeof window !== 'undefined' && rawApiUrl.includes('localhost') ? "" : rawApiUrl
+import { errorLogger, ErrorLogEntry, LogLevel, ApiErrorLogContext } from "./logger"
+
+export { errorLogger }
+export type { ErrorLogEntry, LogLevel, ApiErrorLogContext }
+
+// Always use relative routes in browser if NEXT_PUBLIC_API_URL is undefined, invalid, or localhost
+export function sanitizeApiBaseUrl(raw?: string): { url: string; isValid: boolean; reason?: string } {
+  const trimmed = (raw || '').trim()
+  if (!trimmed) {
+    return { url: '', isValid: true }
+  }
+  
+  // Check if it's an email/handle like "user@1234" or non-URL string
+  if (trimmed.includes('@') && !trimmed.startsWith('http')) {
+    return {
+      url: '',
+      isValid: false,
+      reason: `Invalid format: "${trimmed}" looks like a username/account ID, not a valid HTTP(S) URL. Safely falling back to same-origin routes.`
+    }
+  }
+
+  // Must start with http:// or https://
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return {
+      url: '',
+      isValid: false,
+      reason: `Invalid protocol: "${trimmed}" does not start with http:// or https://. Safely falling back to same-origin routes.`
+    }
+  }
+
+  try {
+    const parsed = new URL(trimmed)
+    if (typeof window !== 'undefined' && parsed.hostname === 'localhost' && !window.location.hostname.includes('localhost')) {
+      return {
+        url: '',
+        isValid: false,
+        reason: 'Localhost URL detected while running in cloud environment. Auto-switching to same-origin routes.'
+      }
+    }
+    return { url: trimmed.replace(/\/+$/, ''), isValid: true }
+  } catch (err: any) {
+    return {
+      url: '',
+      isValid: false,
+      reason: `Malformed URL format: ${err?.message || 'Invalid URI'}`
+    }
+  }
+}
+
+const apiConfig = sanitizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL)
+// When an external host URL is configured, route via /api/proxy to bypass browser CORS restrictions server-side
+const USE_PROXY_FOR_REMOTE = typeof window !== 'undefined' && apiConfig.isValid && apiConfig.url.startsWith('http')
+const API_URL = USE_PROXY_FOR_REMOTE ? '/api/proxy' : apiConfig.url
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const url = `${API_URL}${path}`
+  // Prevent double prefixing if path already includes /api/proxy
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  const url = API_URL.endsWith('/api/proxy') && cleanPath.startsWith('/api/proxy')
+    ? cleanPath
+    : `${API_URL}${cleanPath}`
+  const method = options?.method || "GET"
+  const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now()
+
+  // Track breadcrumb for outbound request
+  errorLogger.addBreadcrumb({
+    category: 'http',
+    message: `${method} ${path}`,
+    data: { url, method },
+    level: 'info',
+  })
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -12,14 +77,44 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
         ...options?.headers,
       },
     })
+    
+    const latencyMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTime)
     const data = await response.json().catch(() => null)
+    
     if (!response.ok) {
       const errMsg = data?.detail || data?.error || data?.message || `API request failed with status ${response.status}`
-      throw new Error(errMsg)
+      const error = new Error(errMsg)
+      
+      // Log structured API error to console and Sentry (if enabled)
+      errorLogger.captureApiError({
+        endpoint: path,
+        method,
+        statusCode: response.status,
+        statusText: response.statusText,
+        latencyMs,
+        error,
+        requestBody: options?.body instanceof FormData ? '[FormData]' : options?.body,
+        responseData: data,
+      })
+
+      throw error
     }
+
     return data as T
   } catch (err: any) {
-    console.warn(`[API] fetch to ${path} failed:`, err?.message || err)
+    const latencyMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTime)
+    
+    // Only capture if not already captured by the non-ok response block
+    if (!err.logged) {
+      errorLogger.captureApiError({
+        endpoint: path,
+        method,
+        latencyMs,
+        error: err,
+        requestBody: options?.body instanceof FormData ? '[FormData]' : options?.body,
+      })
+    }
+
     throw err
   }
 }
@@ -253,9 +348,25 @@ export const getCategories = () => apiFetch<ApiCategory[]>("/categories")
 export const createCategory = (payload: { name: string; description?: string }) => apiFetch<ApiCategory>("/categories", { method: "POST", body: JSON.stringify(payload) })
 export const deleteCategory = (id: number) => apiFetch<{ status: string }>(`/categories/${id}`, { method: "DELETE" })
 
+export type ApiSkuMapping = {
+  id: number
+  raw_sku: string
+  product_id: number
+  product_name: string
+  category: string
+  assigned_worker: string
+  worker_override?: string | null
+  match_type: string
+  times_seen: number
+  first_seen_at: string
+  last_seen_at: string
+}
+
 // Training APIs
 export const getTrainingStats = () => apiFetch<TrainingStats>("/training/stats")
 export const getUnknownSkus = () => apiFetch<UnknownSkuItem[]>("/training/unknown")
+export const getSkuMappings = () => apiFetch<ApiSkuMapping[]>("/training/mappings")
+export const deleteSkuMapping = (id: number) => apiFetch<{ status: string; message: string }>(`/training/mappings?id=${id}`, { method: "DELETE" })
 export const mapSku = (payload: {
   raw_sku: string
   product_id: number
@@ -309,3 +420,18 @@ export const getHistory = (range = "today", startDate?: string, endDate?: string
   apiFetch<any>(`/history?range=${range}${startDate ? `&start_date=${startDate}` : ""}${endDate ? `&end_date=${endDate}` : ""}`)
 export const searchShipments = (q: string) =>
   apiFetch<any[]>(`/shipments/search?q=${encodeURIComponent(q)}`)
+
+// Database Management APIs
+export const clearOldLabelData = () =>
+  apiFetch<{ status: string; message: string; result: any }>("/database/clear-labels", { method: "POST" })
+export const resetDatabaseToDefault = () =>
+  apiFetch<{ status: string; message: string; result: any }>("/database/reset", { method: "POST" })
+export const syncDatabaseWithDisk = () =>
+  apiFetch<{ status: string; message: string; result: any }>("/database/sync", { method: "POST" })
+export const getDatabaseStats = () =>
+  apiFetch<any>("/database/sync", { method: "GET" })
+export const getFullDatabaseExport = () =>
+  apiFetch<any>("/database", { method: "GET" })
+export const importDatabaseData = (data: any) =>
+  apiFetch<any>("/database", { method: "POST", body: JSON.stringify(data) })
+

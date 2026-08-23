@@ -1,0 +1,203 @@
+{
+  "_comment": "Direct SKU Training & Mapping Rules for Flipkart Label Manager. You can edit this file directly in VS Code!",
+  "description": "Edit or add SKU mappings and pattern rules below. Save this file and the system will apply them immediately.",
+  "sku_mappings": [
+    {
+      "raw_sku": "BP-ROLL-2026",
+      "product_name": "Butter Paper",
+      "assigned_worker": "Kartik Da",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "BUTTERPAPER-100S",
+      "product_name": "Butter Paper",
+      "assigned_worker": "Kartik Da",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "ALU-CONT-450ML",
+      "product_name": "Aluminium Container",
+      "assigned_worker": "Kartik Da",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "ALU-FOIL-750ML",
+      "product_name": "Aluminium Container",
+      "assigned_worker": "Kartik Da",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "GB-ROLL-17X19-STAR",
+      "product_name": "Garbage Bag Roll 17x19",
+      "assigned_worker": "Kartik Da",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "GB-ROLL-19X21-AVERX",
+      "product_name": "Garbage Bag Roll 19x21",
+      "assigned_worker": "Kartik Da",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "GB-STD-PLAIN-30",
+      "product_name": "Garbage Bag Standard Pack",
+      "assigned_worker": "Kartik Da",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "7_SEST-NAF2-R1-B-1",
+      "product_name": "R1",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "7_SEST-NAF4-R1-B-1",
+      "product_name": "R1",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "7_SEST-NAF2-R1S-B-1",
+      "product_name": "R1S",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "7_SEST-NAF3-R1S-B-1",
+      "product_name": "R1S",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "7_SEST-FKSB1-R16S-B-1",
+      "product_name": "R16S",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "7_SEST-NAF-R1L-B-1",
+      "product_name": "R1L",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "7_SEST-NAF-SE-3B-B-1",
+      "product_name": "SE-3B",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "SE-3B",
+      "product_name": "SE-3B",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "AX6-MIC-W-01",
+      "product_name": "AX6",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "AX-10B",
+      "product_name": "AX-10B",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "7_TRIP-7FT+RFL-10I-BES3-2",
+      "product_name": "Ring Flash 10-Inch",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "7_MIC-NAF-3.5MM-B-1",
+      "product_name": "NAFA Clip Microphone",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "7_TRIP-CLIP001-NAF-B-1",
+      "product_name": "Mobile Holder Clip",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "HT-MLWBR-01",
+      "product_name": "HideTheory Leather Wallet",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "6_EBCC-NAF-AAPRO-NC042",
+      "product_name": "AirPods Silicone Case",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    }
+  ],
+  "pattern_rules": [
+    {
+      "rule_type": "starts_with",
+      "value": "GB-",
+      "product_name": null,
+      "suggested_worker": "Kartik Da",
+      "priority": 10
+    },
+    {
+      "rule_type": "starts_with",
+      "value": "BP-",
+      "product_name": "Butter Paper",
+      "suggested_worker": "Kartik Da",
+      "priority": 10
+    },
+    {
+      "rule_type": "starts_with",
+      "value": "ALU-",
+      "product_name": "Aluminium Container",
+      "suggested_worker": "Kartik Da",
+      "priority": 10
+    },
+    {
+      "rule_type": "contains",
+      "value": "17X19",
+      "product_name": "Garbage Bag Roll 17x19",
+      "suggested_worker": "Kartik Da",
+      "priority": 15
+    },
+    {
+      "rule_type": "contains",
+      "value": "19X21",
+      "product_name": "Garbage Bag Roll 19x21",
+      "suggested_worker": "Kartik Da",
+      "priority": 15
+    },
+    {
+      "rule_type": "contains",
+      "value": "R16S",
+      "product_name": "R16S",
+      "suggested_worker": "Sohel",
+      "priority": 20
+    },
+    {
+      "rule_type": "contains",
+      "value": "R1S",
+      "product_name": "R1S",
+      "suggested_worker": "Sohel",
+      "priority": 20
+    },
+    {
+      "rule_type": "contains",
+      "value": "SE-3B",
+      "product_name": "SE-3B",
+      "suggested_worker": "Sohel",
+      "priority": 20
+    },
+    {
+      "rule_type": "contains",
+      "value": "AX-10B",
+      "product_name": "AX-10B",
+      "suggested_worker": "Sohel",
+      "priority": 20
+    }
+  ]
+}

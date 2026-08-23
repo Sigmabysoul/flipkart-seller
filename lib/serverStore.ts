@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 export interface Worker {
   id: number;
   name: string;
@@ -302,35 +305,37 @@ export function calculatePackMaterials(
 }
 
 // Global In-Memory Store
-declare global {
-  var __flipkart_store: {
-    workers: Worker[];
-    categories: Category[];
-    products: Product[];
-    skuMappings: SKUMapping[];
-    packingRecipes: PackingRecipe[];
-    patternRules: PatternRule[];
-    trainingHistory: TrainingHistoryItem[];
-    printEvents: PrintEvent[];
-    batches: BatchItem[];
-    shipments: Shipment[];
-    nextId: {
-      worker: number;
-      category: number;
-      product: number;
-      mapping: number;
-      recipe: number;
-      rule: number;
-      history: number;
-      print: number;
-      batch: number;
-      shipment: number;
-      item: number;
-    };
-  } | undefined;
+export interface StoreData {
+  workers: Worker[];
+  categories: Category[];
+  products: Product[];
+  skuMappings: SKUMapping[];
+  packingRecipes: PackingRecipe[];
+  patternRules: PatternRule[];
+  trainingHistory: TrainingHistoryItem[];
+  printEvents: PrintEvent[];
+  batches: BatchItem[];
+  shipments: Shipment[];
+  nextId: {
+    worker: number;
+    category: number;
+    product: number;
+    mapping: number;
+    recipe: number;
+    rule: number;
+    history: number;
+    print: number;
+    batch: number;
+    shipment: number;
+    item: number;
+  };
 }
 
-function initStore() {
+declare global {
+  var __flipkart_store: StoreData | undefined;
+}
+
+export function initStore(): StoreData {
   if (global.__flipkart_store) return global.__flipkart_store;
 
   const now = new Date().toISOString();
@@ -773,7 +778,7 @@ function initStore() {
     },
   ];
 
-  global.__flipkart_store = {
+  const defaultStoreData = {
     workers,
     categories,
     products,
@@ -799,7 +804,238 @@ function initStore() {
     },
   };
 
-  return global.__flipkart_store;
+  // Try to load from disk if available
+  const diskData = loadStoreFromDisk();
+  if (diskData) {
+    global.__flipkart_store = diskData;
+  } else {
+    global.__flipkart_store = defaultStoreData;
+  }
+
+  return global.__flipkart_store!;
 }
 
-export const store = initStore();
+export const store: StoreData = initStore();
+
+const DATA_DIR = path.join(process.cwd(), 'data');
+const DB_FILE = path.join(DATA_DIR, 'db.json');
+const SKU_RULES_FILE = path.join(DATA_DIR, 'sku-rules.json');
+const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
+
+export function saveStoreToDisk(currentStore: StoreData = store): boolean {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    
+    // Save master DB file
+    fs.writeFileSync(DB_FILE, JSON.stringify(currentStore, null, 2), 'utf-8');
+
+    // Also sync human-readable sku-rules.json for easy VS Code editing
+    const humanSkuRules = {
+      _comment: "Direct SKU Training & Mapping Rules for Flipkart Label Manager. You can edit this file directly in VS Code!",
+      description: "Edit or add SKU mappings and pattern rules below. Save this file and click 'Sync with VS Code Disk Files' or make an API request.",
+      sku_mappings: currentStore.skuMappings.map((m) => {
+        const prod = currentStore.products.find((p) => p.id === m.product_id);
+        return {
+          raw_sku: m.raw_sku,
+          product_name: prod ? prod.name : `Product #${m.product_id}`,
+          assigned_worker: m.worker_override || (prod ? prod.assigned_worker : 'Sohel'),
+          match_type: m.match_type || 'exact',
+        };
+      }),
+      pattern_rules: currentStore.patternRules.map((r) => {
+        const prod = r.product_id ? currentStore.products.find((p) => p.id === r.product_id) : null;
+        return {
+          rule_type: r.rule_type,
+          value: r.value,
+          product_name: prod ? prod.name : null,
+          suggested_worker: r.suggested_worker || null,
+          priority: r.priority || 10,
+        };
+      }),
+    };
+    fs.writeFileSync(SKU_RULES_FILE, JSON.stringify(humanSkuRules, null, 2), 'utf-8');
+
+    // Also sync products.json for easy product catalog and recipe editing
+    fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(currentStore.products, null, 2), 'utf-8');
+
+    return true;
+  } catch (err) {
+    console.error('[ServerStore] Failed to save store to disk:', err);
+    return false;
+  }
+}
+
+export function loadStoreFromDisk() {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.products) && Array.isArray(parsed.skuMappings)) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error('[ServerStore] Error loading db.json from disk:', err);
+  }
+  return null;
+}
+
+// Clears all test batches, label shipments, and print history while KEEPING all training data, SKU mappings, pattern rules, products, categories, and workers
+export function clearLabelAndBatchData() {
+  const currentStore = store;
+  const deletedBatchesCount = currentStore.batches.length;
+  const deletedShipmentsCount = currentStore.shipments.length;
+  const deletedPrintsCount = currentStore.printEvents.length;
+
+  currentStore.batches = [];
+  currentStore.shipments = [];
+  currentStore.printEvents = [];
+  currentStore.nextId.batch = 1;
+  currentStore.nextId.shipment = 1;
+  currentStore.nextId.item = 1;
+  currentStore.nextId.print = 1;
+
+  saveStoreToDisk(currentStore);
+
+  return {
+    success: true,
+    deleted_batches: deletedBatchesCount,
+    deleted_shipments: deletedShipmentsCount,
+    deleted_prints: deletedPrintsCount,
+    preserved_products: currentStore.products.length,
+    preserved_sku_mappings: currentStore.skuMappings.length,
+    preserved_pattern_rules: currentStore.patternRules.length,
+    preserved_workers: currentStore.workers.length,
+    preserved_categories: currentStore.categories.length,
+  };
+}
+
+// Resets store back to initial seed data
+export function resetStoreToDefault() {
+  global.__flipkart_store = undefined;
+  if (fs.existsSync(DB_FILE)) {
+    try {
+      fs.unlinkSync(DB_FILE);
+    } catch {}
+  }
+  const fresh = initStore();
+  saveStoreToDisk(fresh);
+  return {
+    success: true,
+    message: "Store reset to initial factory seed data.",
+  };
+}
+
+// Syncs store when human edits sku-rules.json or products.json in VS Code
+export function syncStoreFromDiskFiles() {
+  const currentStore = store;
+  let skuUpdated = false;
+  let productsUpdated = false;
+
+  // 1. Check products.json
+  if (fs.existsSync(PRODUCTS_FILE)) {
+    try {
+      const rawProducts = fs.readFileSync(PRODUCTS_FILE, 'utf-8');
+      const parsedProducts = JSON.parse(rawProducts);
+      if (Array.isArray(parsedProducts) && parsedProducts.length > 0) {
+        currentStore.products = parsedProducts;
+        productsUpdated = true;
+      }
+    } catch (e) {
+      console.error('[ServerStore] Failed to parse products.json:', e);
+    }
+  }
+
+  // 2. Check sku-rules.json
+  if (fs.existsSync(SKU_RULES_FILE)) {
+    try {
+      const rawSku = fs.readFileSync(SKU_RULES_FILE, 'utf-8');
+      const parsedSku = JSON.parse(rawSku);
+      const now = new Date().toISOString();
+
+      if (parsedSku && Array.isArray(parsedSku.sku_mappings)) {
+        const newMappings: SKUMapping[] = [];
+        let mappingId = 1;
+
+        for (const item of parsedSku.sku_mappings) {
+          if (!item.raw_sku) continue;
+          
+          // Match product by name or ID
+          let prod = currentStore.products.find(
+            (p) => p.name.toLowerCase() === (item.product_name || '').toLowerCase()
+          );
+          if (!prod && item.product_id) {
+            prod = currentStore.products.find((p) => p.id === item.product_id);
+          }
+          if (!prod && currentStore.products.length > 0) {
+            prod = currentStore.products[0];
+          }
+
+          if (prod) {
+            newMappings.push({
+              id: mappingId++,
+              raw_sku: item.raw_sku,
+              product_id: prod.id,
+              match_type: item.match_type || 'exact',
+              worker_override: item.assigned_worker && item.assigned_worker !== prod.assigned_worker ? item.assigned_worker : null,
+              active: true,
+              times_seen: 1,
+              first_seen_at: now,
+              last_seen_at: now,
+            });
+          }
+        }
+
+        if (newMappings.length > 0) {
+          currentStore.skuMappings = newMappings;
+          currentStore.nextId.mapping = mappingId;
+          skuUpdated = true;
+        }
+      }
+
+      // Sync pattern rules if present
+      if (parsedSku && Array.isArray(parsedSku.pattern_rules)) {
+        const newRules: PatternRule[] = [];
+        let ruleId = 1;
+
+        for (const r of parsedSku.pattern_rules) {
+          if (!r.value) continue;
+          const prod = r.product_name
+            ? currentStore.products.find((p) => p.name.toLowerCase() === r.product_name.toLowerCase())
+            : null;
+
+          newRules.push({
+            id: ruleId++,
+            rule_type: r.rule_type || 'contains',
+            value: r.value,
+            product_id: prod ? prod.id : null,
+            suggested_worker: r.suggested_worker || null,
+            priority: r.priority || 10,
+            active: true,
+          });
+        }
+
+        if (newRules.length > 0) {
+          currentStore.patternRules = newRules;
+          currentStore.nextId.rule = ruleId;
+        }
+      }
+    } catch (e) {
+      console.error('[ServerStore] Failed to parse sku-rules.json:', e);
+    }
+  }
+
+  saveStoreToDisk(currentStore);
+
+  return {
+    success: true,
+    skuUpdated,
+    productsUpdated,
+    totalProducts: currentStore.products.length,
+    totalSkuMappings: currentStore.skuMappings.length,
+    totalPatternRules: currentStore.patternRules.length,
+  };
+}
+

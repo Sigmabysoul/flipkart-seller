@@ -10,6 +10,7 @@ import {
   BookOpen,
   Box,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   CloudUpload,
@@ -21,11 +22,13 @@ import {
   Moon,
   Package,
   Plus,
+  PlusCircle,
   Printer,
   Search,
   Settings as SettingsIcon,
   ShieldAlert,
   Sun,
+  Tag,
   Tags,
   TrainFront,
   Trash2,
@@ -57,6 +60,16 @@ import {
   Command,
   Calculator,
   Sliders,
+  Database,
+  RotateCcw,
+  Code,
+  FileCode,
+  Edit3,
+  SlidersHorizontal,
+  ArrowRight,
+  Sparkle,
+  Bookmark,
+  GitBranch,
 } from 'lucide-react'
 
 import {
@@ -73,6 +86,9 @@ import {
   deleteCategory,
   getTrainingStats,
   getUnknownSkus,
+  getSkuMappings,
+  deleteSkuMapping,
+  ApiSkuMapping,
   mapSku,
   bulkMapSkus,
   getTrainingHistory,
@@ -86,6 +102,11 @@ import {
   recordPrintEvent,
   getHistory,
   searchShipments,
+  clearOldLabelData,
+  resetDatabaseToDefault,
+  syncDatabaseWithDisk,
+  getFullDatabaseExport,
+  importDatabaseData,
   ApiProduct,
   ApiWorker,
   ApiCategory,
@@ -96,6 +117,7 @@ import {
   ParsedLabelItem,
   ProcessBatchResponse,
 } from '@/lib/api'
+import { ApiDiagnostics } from './api-diagnostics'
 
 const nav = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -142,6 +164,117 @@ function TableWrap({ children }: { children: React.ReactNode }) {
   return <div className="table-wrap"><table>{children}</table></div>
 }
 
+// ----------------------------------------------------------------------
+// SKELETON LOADING COMPONENTS
+// ----------------------------------------------------------------------
+export function Skeleton({ className = '' }: { className?: string }) {
+  return (
+    <div
+      className={`animate-pulse bg-slate-200 dark:bg-slate-800 rounded ${className}`}
+      role="status"
+      aria-label="Loading..."
+    />
+  )
+}
+
+export function ViewSkeleton({
+  title = 'Loading View...',
+  eyebrow = 'Warehouse Pipeline',
+  statCount = 4,
+}: {
+  title?: string
+  eyebrow?: string
+  statCount?: number
+}) {
+  return (
+    <div className="space-y-6 animate-pulse" aria-busy="true" aria-live="polite">
+      {/* Header Skeleton */}
+      <div className="page-head">
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-7 w-64" />
+          <Skeleton className="h-4 w-96 max-w-full" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-28" />
+          <Skeleton className="h-9 w-28" />
+        </div>
+      </div>
+
+      {/* Stats Cards Skeleton */}
+      <div className={`stats-grid ${statCount === 3 ? 'three' : ''}`}>
+        {Array.from({ length: statCount }).map((_, i) => (
+          <div key={i} className="stat-card">
+            <Skeleton className="w-9 h-9 rounded-lg shrink-0" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-6 w-24" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Main Grid / Panels Skeleton */}
+      <div className="two-col">
+        <div className="panel space-y-4">
+          <div className="flex justify-between items-center pb-2 border-b border-border">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+          <div className="space-y-3 pt-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex justify-between items-center py-2 border-b border-border/50">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-8 h-8 rounded-full" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+                <Skeleton className="h-5 w-16 rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel space-y-4">
+          <div className="flex justify-between items-center pb-2 border-b border-border">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+          <div className="space-y-3 pt-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2 py-1">
+                <div className="flex justify-between">
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-4 w-12" />
+                </div>
+                <Skeleton className="h-2 w-full rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Table Skeleton */}
+      <div className="panel space-y-4">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="h-8 w-44" />
+        </div>
+        <div className="space-y-3 pt-2">
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 function StatusBadge({ value }: { value: string }) {
   const v = value.toLowerCase()
   let kind = 'neutral'
@@ -150,6 +283,25 @@ function StatusBadge({ value }: { value: string }) {
   else if (['unknown', 'mismatch', 'cancelled', 'danger'].includes(v)) kind = 'danger'
   else if (['mixed', 'info', 'draft'].includes(v)) kind = 'info'
   return <Badge kind={kind}>{value}</Badge>
+}
+
+// Global helper to revalidate dashboard and workspace data after any changes
+export function revalidateWarehouseData() {
+  mutate(
+    (key) =>
+      typeof key === 'string' &&
+      (key.startsWith('/dashboard') ||
+        key.startsWith('/training') ||
+        key.startsWith('/history') ||
+        key.startsWith('/products') ||
+        key.startsWith('/workers') ||
+        key.startsWith('/categories') ||
+        key.startsWith('/database') ||
+        key.startsWith('/batches') ||
+        key.startsWith('/shipments')),
+    undefined,
+    { revalidate: true }
+  )
 }
 
 // Global helper to generate and download Warehouse Dispatch CSV
@@ -226,10 +378,10 @@ export default function LabelManager() {
     setShowNotifications(false)
   }
 
-  // Live unknown count for nav badge
-  const { data: trainStats } = useSWR('/training/stats', getTrainingStats, { refreshInterval: 5000 })
-  // Live shift dashboard data for global progress bar metrics
-  const { data: dashData } = useSWR(`/dashboard?date=${selectedDate}`, () => getDashboard(selectedDate), { refreshInterval: 5000 })
+  // Live unknown count for nav badge (2m refresh cycle)
+  const { data: trainStats } = useSWR('/training/stats', getTrainingStats, { refreshInterval: 120000 })
+  // Live shift dashboard data for global progress bar metrics (2m refresh cycle)
+  const { data: dashData } = useSWR(`/dashboard?date=${selectedDate}`, () => getDashboard(selectedDate), { refreshInterval: 120000 })
 
   // Global Actions
   const handleProcessLabelGlobal = () => {
@@ -270,8 +422,7 @@ export default function LabelManager() {
         setActiveBatch({ ...activeBatch, status: 'confirmed' })
       }
       showToast(`Batch #${batchId} successfully confirmed into warehouse accounting!`)
-      mutate(`/dashboard?date=${selectedDate}`)
-      mutate('/training/stats')
+      revalidateWarehouseData()
     } catch (err: any) {
       showToast(`Confirm failed: ${err.message}`)
     }
@@ -356,9 +507,7 @@ export default function LabelManager() {
       // 'R' or Alt+R -> Refresh Metrics
       if ((key === 'r' && !isInput) || (e.altKey && key === 'r')) {
         e.preventDefault()
-        mutate(`/dashboard?date=${selectedDate}`)
-        mutate('/training/stats')
-        mutate('/history')
+        revalidateWarehouseData()
         showToast('Refreshed warehouse metrics [R]')
         return
       }
@@ -743,10 +892,11 @@ export default function LabelManager() {
 // 1. DASHBOARD VIEW
 // ----------------------------------------------------------------------
 function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
+  const [autoRefresh, setAutoRefresh] = useState(true)
   const { data: dash, mutate: refreshDash, isLoading } = useSWR(
     `/dashboard?date=${selectedDate}`,
     () => getDashboard(selectedDate),
-    { refreshInterval: 5000 }
+    { refreshInterval: autoRefresh ? 120000 : 0 }
   )
 
   const [productFilter, setProductFilter] = useState('')
@@ -883,6 +1033,10 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
     showToast(`Exported CSV report for ${selectedDate}`)
   }
 
+  if (isLoading && !dash) {
+    return <ViewSkeleton eyebrow={`Processing Date: ${selectedDate}`} title="Loading Warehouse Dashboard..." statCount={4} />
+  }
+
   return (
     <>
       <PageHead
@@ -891,6 +1045,19 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
         description={`Dispatched product volume, category breakdown, SKU stock-out, and recent batches for ${dateFormatted}.`}
         action={
           <div className="flex gap-2 flex-wrap items-center">
+            <button
+              className={`button secondary ${autoRefresh ? 'border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20' : 'text-muted'}`}
+              id="dash-auto-refresh-toggle-btn"
+              onClick={() => {
+                const nextState = !autoRefresh
+                setAutoRefresh(nextState)
+                showToast(`Auto-refresh (2m) ${nextState ? 'enabled' : 'disabled'}`)
+              }}
+              title={autoRefresh ? 'Auto-refresh active (updates every 2 mins). Click to pause.' : 'Auto-refresh paused. Click to enable 2m interval.'}
+            >
+              <span className={`w-2 h-2 rounded-full ${autoRefresh ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+              Auto-refresh: {autoRefresh ? '2m On' : 'Off'}
+            </button>
             <button
               className="button secondary"
               id="dash-export-csv-btn"
@@ -980,6 +1147,9 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
           </div>
         </div>
       </div>
+
+      {/* Real-Time API & NEXT_PUBLIC_API_URL Diagnostics */}
+      <ApiDiagnostics />
 
       {/* Top Level Metric Stats Grid */}
       <div className="stats-grid" id="main-stats-grid">
@@ -1643,7 +1813,7 @@ function KartikStationView({ go, selectedDate, setSelectedDate, showToast }: any
   const { data: dash, mutate: refreshDash, isLoading } = useSWR(
     `/dashboard?date=${selectedDate}`,
     () => getDashboard(selectedDate),
-    { refreshInterval: 5000 }
+    { refreshInterval: 120000 }
   )
 
   const [searchTerm, setSearchTerm] = useState('')
@@ -1741,8 +1911,8 @@ function KartikStationView({ go, selectedDate, setSelectedDate, showToast }: any
     plain_3bag: simGarbageLabels !== null ? Math.round(activeBagBase * 0.4) : (boxMap['plain-3bag'] ?? 12),
   }
 
-  // Shipments for Kartik Da
-  const shipmentsList = kartikData.shipments && kartikData.shipments.length > 0
+  // Shipments for Kartik Da (Normalized)
+  const rawShipments = kartikData.shipments && kartikData.shipments.length > 0
     ? kartikData.shipments
     : [
         { awb_number: 'FMPC22001', order_id: 'OD-GB-9901', product_name: 'Butter Paper Roll', quantity: 1, destination_city: 'Kolkata, WB', payment_mode: 'PREPAID', print_status: 'printed' },
@@ -1757,20 +1927,31 @@ function KartikStationView({ go, selectedDate, setSelectedDate, showToast }: any
         { awb_number: 'FMPC22010', order_id: 'OD-GB-9910', product_name: 'Garbage Bag Roll 19x21', quantity: 1, destination_city: 'Bhubaneswar, OD', payment_mode: 'COD', print_status: 'pending' },
       ]
 
+  const shipmentsList = rawShipments.map((s: any) => ({
+    awb_number: s.awb_number || s.awb || 'AWB-LIVE',
+    order_id: s.order_id || 'OD-LIVE',
+    product_name: s.product_name || s.items?.[0]?.product || s.items?.[0]?.raw_sku || 'Garbage Bag Roll',
+    quantity: s.quantity ?? (s.items?.reduce((sum: number, it: any) => sum + (it.quantity || 1), 0) || 1),
+    destination_city: s.destination_city || 'Regional Hub',
+    payment_mode: s.payment_mode || 'PREPAID',
+    print_status: s.print_status || 'printed',
+  }))
+
   // Filtered shipments
   const filteredShipments = shipmentsList.filter((s: any) => {
-    const matchesSearch =
-      !searchTerm ||
-      s.awb_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.order_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.destination_city?.toLowerCase().includes(searchTerm.toLowerCase())
+    const awb = (s.awb_number || '').toLowerCase()
+    const ord = (s.order_id || '').toLowerCase()
+    const prod = (s.product_name || '').toLowerCase()
+    const dest = (s.destination_city || '').toLowerCase()
+    const q = (searchTerm || '').toLowerCase()
+
+    const matchesSearch = !q || awb.includes(q) || ord.includes(q) || prod.includes(q) || dest.includes(q)
 
     const matchesCat =
       filterCategory === 'all' ||
-      (filterCategory === 'garbage' && s.product_name?.toLowerCase().includes('garbage')) ||
-      (filterCategory === 'butter' && s.product_name?.toLowerCase().includes('butter')) ||
-      (filterCategory === 'aluminium' && s.product_name?.toLowerCase().includes('aluminium'))
+      (filterCategory === 'garbage' && prod.includes('garbage')) ||
+      (filterCategory === 'butter' && prod.includes('butter')) ||
+      (filterCategory === 'aluminium' && prod.includes('aluminium'))
 
     return matchesSearch && matchesCat
   })
@@ -1841,6 +2022,10 @@ Product Summary:
     link.click()
     document.body.removeChild(link)
     showToast(`Exported Kartik Da's manifest for ${selectedDate}`)
+  }
+
+  if (isLoading && !dash) {
+    return <ViewSkeleton eyebrow={`Station 2 • Dedicated Packing Line`} title="Loading Kartik Da's Station..." statCount={4} />
   }
 
   return (
@@ -2337,8 +2522,8 @@ Product Summary:
                     </td>
                     <td>
                       <div className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full ${s.product_name.includes('Garbage') ? 'bg-teal-500' : s.product_name.includes('Butter') ? 'bg-amber-500' : 'bg-slate-400'}`} />
-                        <strong className="text-xs">{s.product_name}</strong>
+                        <span className={`w-2 h-2 rounded-full ${(s?.product_name || '').includes('Garbage') ? 'bg-teal-500' : (s?.product_name || '').includes('Butter') ? 'bg-amber-500' : 'bg-slate-400'}`} />
+                        <strong className="text-xs">{s?.product_name || 'Standard Item'}</strong>
                       </div>
                     </td>
                     <td>
@@ -2387,7 +2572,7 @@ function MyStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
   const { data: dash, mutate: refreshDash, isLoading } = useSWR(
     `/dashboard?date=${selectedDate}`,
     () => getDashboard(selectedDate),
-    { refreshInterval: 5000 }
+    { refreshInterval: 120000 }
   )
 
   const [searchOrder, setSearchOrder] = useState('')
@@ -2451,8 +2636,8 @@ function MyStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
     )
   })
 
-  // Shipments for My Station
-  const myShipmentsList = myData.shipments && myData.shipments.length > 0
+  // Shipments for My Station (Normalized)
+  const rawMyShipments = myData.shipments && myData.shipments.length > 0
     ? myData.shipments
     : [
         { awb_number: 'FMPC11001', order_id: 'OD-SH-8801', product_name: 'R1 Bluetooth Selfie Stick', code: 'R1', quantity: 1, destination_city: 'Mumbai, MH', payment_mode: 'PREPAID' },
@@ -2466,6 +2651,17 @@ function MyStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
         { awb_number: 'FMPC11009', order_id: 'OD-SH-8809', product_name: 'HideTheory Leather Wallet', code: 'HideTheory Leather Wallet', quantity: 1, destination_city: 'Chandigarh, PB', payment_mode: 'COD' },
         { awb_number: 'FMPC11010', order_id: 'OD-SH-8810', product_name: 'AirPods Silicone Armor Case', code: 'AirPods Silicone Case', quantity: 1, destination_city: 'Chennai, TN', payment_mode: 'PREPAID' },
       ]
+
+  const myShipmentsList = rawMyShipments.map((s: any) => ({
+    awb_number: s.awb_number || s.awb || 'AWB-LIVE',
+    order_id: s.order_id || 'OD-LIVE',
+    product_name: s.product_name || s.items?.[0]?.product || s.items?.[0]?.raw_sku || 'Standard Product',
+    code: s.code || s.items?.[0]?.raw_sku || 'PROD',
+    quantity: s.quantity ?? (s.items?.reduce((sum: number, it: any) => sum + (it.quantity || 1), 0) || 1),
+    destination_city: s.destination_city || 'Regional Hub',
+    payment_mode: s.payment_mode || 'PREPAID',
+    print_status: s.print_status || 'printed',
+  }))
 
   const togglePacked = (awb: string) => {
     setPackedAwbs(prev => ({ ...prev, [awb]: !prev[awb] }))
@@ -2507,6 +2703,10 @@ function MyStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
     link.click()
     document.body.removeChild(link)
     showToast(`Exported My Station report for ${selectedDate}`)
+  }
+
+  if (isLoading && !dash) {
+    return <ViewSkeleton eyebrow={`Station 1 • Main Catalogue Line`} title="Loading My Station (Sohel)..." statCount={4} />
   }
 
   return (
@@ -2745,11 +2945,11 @@ function MyStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
                     </td>
                     <td>
                       <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold font-mono">
-                        {s.code || s.product_name}
+                        {s?.code || s?.product_name || 'PROD'}
                       </span>
                     </td>
                     <td>
-                      <strong className="text-xs">{s.product_name}</strong>
+                      <strong className="text-xs">{s?.product_name || 'Standard Product'}</strong>
                     </td>
                     <td>
                       <strong className="text-xs font-bold font-mono">{s.quantity}x</strong>
@@ -2983,7 +3183,7 @@ function ProcessLabelsView({
       setCurrentStep(7)
       setBatchData(result)
       showToast(`Batch #${result.batch_id} ready for review: ${result.unique_awbs} unique AWBs`)
-      mutate('/training/stats')
+      revalidateWarehouseData()
     } catch (err: any) {
       clearInterval(interval)
       alert(err?.message || 'Failed to process PDF')
@@ -2999,8 +3199,7 @@ function ProcessLabelsView({
       await confirmBatch(batchData.batch_id)
       setBatchData({ ...batchData, status: 'confirmed' })
       showToast(`Batch #${batchData.batch_id} successfully confirmed into warehouse accounting!`)
-      mutate(`/dashboard?date=${batchData.processing_date}`)
-      mutate('/training/stats')
+      revalidateWarehouseData()
     } catch (err: any) {
       alert(err.message)
     } finally {
@@ -3014,7 +3213,7 @@ function ProcessLabelsView({
       await recordPrintEvent(batchData.batch_id, 'Sohel', 'full_batch')
       window.open(`/batches/${batchData.batch_id}/pdf?sort=${sortMode}`, '_blank')
       showToast(`Print opened in real-time sequence (${sortModeLabel(sortMode)}).`)
-      mutate(`/dashboard?date=${batchData.processing_date}`)
+      revalidateWarehouseData()
     } catch (err: any) {
       alert(err.message)
     }
@@ -3699,6 +3898,8 @@ function ProductsView({ showToast }: any) {
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [workerFilter, setWorkerFilter] = useState('all')
+  const [familyFilter, setFamilyFilter] = useState('all')
+  const [activeOnly, setActiveOnly] = useState(false)
   const [dialog, setDialog] = useState<string | null>(null)
   const [editingProduct, setEditingProduct] = useState<ApiProduct | null>(null)
 
@@ -3708,12 +3909,23 @@ function ProductsView({ showToast }: any) {
 
   const filtered = products.filter((p) => {
     const matchSearch =
+      !search ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.internal_code || '').toLowerCase().includes(search.toLowerCase())
-    const matchCat = categoryFilter === 'all' || p.category?.toLowerCase() === categoryFilter.toLowerCase()
+      (p.internal_code || '').toLowerCase().includes(search.toLowerCase()) ||
+      (p.category || '').toLowerCase().includes(search.toLowerCase()) ||
+      (p.notes || '').toLowerCase().includes(search.toLowerCase())
+    const matchCat = categoryFilter === 'all' || (p.category || 'General').toLowerCase() === categoryFilter.toLowerCase()
     const matchWorker = workerFilter === 'all' || p.assigned_worker?.toLowerCase() === workerFilter.toLowerCase()
-    return matchSearch && matchCat && matchWorker
+    const matchFamily = familyFilter === 'all' || (p.bag_family || 'None').toLowerCase() === familyFilter.toLowerCase()
+    const matchActive = !activeOnly || p.active
+    return matchSearch && matchCat && matchWorker && matchFamily && matchActive
   })
+
+  // Quick stats
+  const totalActive = products.filter((p) => p.active).length
+  const bagProducts = products.filter((p) => p.bag_family)
+  const sohelCount = products.filter((p) => p.assigned_worker === 'Sohel').length
+  const kartikCount = products.filter((p) => p.assigned_worker === 'Kartik Da').length
 
   return (
     <>
@@ -3722,140 +3934,244 @@ function ProductsView({ showToast }: any) {
         title="Product Library & PackCalc Recipes"
         description="Manage canonical warehouse products, worker picking inheritance, and garbage-bag raw material recipes."
         action={
-          <button className="button primary" id="add-product-btn" onClick={() => { setEditingProduct(null); setDialog('product') }}>
-            <Plus size={16} /> Add product
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="button secondary"
+              id="new-category-btn"
+              onClick={async () => {
+                const name = window.prompt('New category name (e.g. Tripod, Selfie Stick, Lights):')
+                if (name && name.trim()) {
+                  try {
+                    await createCategory({ name: name.trim() })
+                    refreshCategories()
+                    revalidateWarehouseData()
+                    showToast(`Category "${name.trim()}" created successfully!`)
+                  } catch (e: any) {
+                    alert(e.message)
+                  }
+                }
+              }}
+            >
+              <Plus size={15} /> New Category
+            </button>
+            <button
+              className="button primary"
+              id="add-product-btn"
+              onClick={() => {
+                setEditingProduct(null)
+                setDialog('product')
+              }}
+            >
+              <Plus size={16} /> Add Product
+            </button>
+          </div>
         }
       />
 
-      {/* Toolbar */}
-      <div className="toolbar">
-        <button
-          className="button secondary"
-          id="new-category-btn"
-          onClick={async () => {
-            const name = window.prompt('New category name:')
-            if (name && name.trim()) {
-              try {
-                await createCategory({ name: name.trim() })
-                refreshCategories()
-                showToast(`Category "${name}" created.`)
-              } catch (e: any) {
-                alert(e.message)
-              }
-            }
-          }}
-        >
-          <Plus size={15} /> New category
-        </button>
+      {/* Catalog Summary Stats */}
+      <div className="stats-grid four mb-6" id="product-stats-grid">
+        <Stat
+          label="Total Products"
+          value={products.length}
+          note={`${totalActive} Active / ${products.length - totalActive} Inactive`}
+          icon={Package}
+          tone="blue"
+        />
+        <Stat
+          label="PackCalc Recipes"
+          value={bagProducts.length}
+          note="Configured Bag Families"
+          icon={Calculator}
+          tone="amber"
+        />
+        <Stat
+          label="Warehouse Categories"
+          value={categories.length}
+          note="Product Classifications"
+          icon={FolderTree}
+          tone="teal"
+        />
+        <Stat
+          label="Picking Floor Stations"
+          value={`${sohelCount} / ${kartikCount}`}
+          note="Sohel (My) vs Kartik Da"
+          icon={Users}
+          tone="purple"
+        />
+      </div>
 
-        <div className="search">
-          <Search size={17} />
+      {/* Advanced Toolbar */}
+      <div className="toolbar flex-wrap gap-3">
+        <div className="search flex-1 min-w-[220px]">
+          <Search size={16} />
           <input
             id="search-products-input"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search products or internal codes..."
+            placeholder="Search by name, code (R1S, AX6), category, specs..."
           />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="text-xs text-muted hover:text-foreground px-1"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="bg-transparent border border-slate-700 rounded px-2 py-1 text-xs"
+          className="bg-transparent border border-border rounded-lg px-3 py-1.5 text-xs text-foreground font-medium"
         >
-          <option value="all">All Categories</option>
+          <option value="all">All Categories ({categories.length})</option>
           {categories.map((c) => (
-            <option key={c.id} value={c.name}>{c.name}</option>
+            <option key={c.id} value={c.name}>
+              {c.name}
+            </option>
           ))}
         </select>
 
         <select
           value={workerFilter}
           onChange={(e) => setWorkerFilter(e.target.value)}
-          className="bg-transparent border border-slate-700 rounded px-2 py-1 text-xs"
+          className="bg-transparent border border-border rounded-lg px-3 py-1.5 text-xs text-foreground font-medium"
         >
           <option value="all">All Workers</option>
           {workers.map((w) => (
-            <option key={w.id} value={w.name}>{w.name}</option>
+            <option key={w.id} value={w.name}>
+              {w.name} Station
+            </option>
           ))}
         </select>
 
-        <span className="result-count">{filtered.length} products</span>
+        <select
+          value={familyFilter}
+          onChange={(e) => setFamilyFilter(e.target.value)}
+          className="bg-transparent border border-border rounded-lg px-3 py-1.5 text-xs text-foreground font-medium"
+        >
+          <option value="all">All Bag Families</option>
+          <option value="Star">Star Family</option>
+          <option value="Averx">Averx Family</option>
+          <option value="Plain">Plain Family</option>
+          <option value="None">Non-Bag Products</option>
+        </select>
+
+        <label className="flex items-center gap-2 text-xs text-muted cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={activeOnly}
+            onChange={(e) => setActiveOnly(e.target.checked)}
+            className="rounded border-border"
+          />
+          Active only
+        </label>
+
+        <span className="result-count text-xs text-muted ml-auto font-medium">
+          Showing {filtered.length} of {products.length} products
+        </span>
       </div>
 
+      {/* Products Table Panel */}
       <section className="panel" id="product-list-panel">
         <TableWrap>
           <thead>
             <tr>
-              <th>Product Name</th>
+              <th>Canonical Product</th>
               <th>Internal Code</th>
               <th>Category</th>
-              <th>Assigned Worker</th>
-              <th>PackCalc Recipe</th>
+              <th>Picking Station</th>
+              <th>PackCalc Bag Recipe</th>
               <th>Sort Order</th>
               <th>Status</th>
               <th className="text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((p) => (
-              <tr key={p.id}>
-                <td>
-                  <strong>{p.name}</strong>
-                  {p.notes && <small className="text-muted block">{p.notes}</small>}
-                </td>
-                <td>
-                  <span className="mono text-muted">{p.internal_code || '—'}</span>
-                </td>
-                <td>
-                  <Badge kind="neutral">{p.category || 'General'}</Badge>
-                </td>
-                <td>
-                  <span className="worker-name">
-                    <i className={`dot ${p.assigned_worker === 'Sohel' ? 'blue' : 'teal'}`} />
-                    {p.assigned_worker}
-                  </span>
-                </td>
-                <td>
-                  {p.bag_family ? (
-                    <span className="text-xs font-semibold text-amber-500">
-                      {p.bag_family} ({p.raw_3bag_qty || 0}×3B + {p.raw_2bag_qty || 0}×2B)
+            {filtered.length > 0 ? (
+              filtered.map((p) => (
+                <tr key={p.id}>
+                  <td>
+                    <div className="flex flex-col">
+                      <strong className="text-sm font-semibold text-foreground">{p.name}</strong>
+                      {p.notes && <span className="text-xs text-muted mt-0.5 line-clamp-1">{p.notes}</span>}
+                    </div>
+                  </td>
+                  <td>
+                    {p.internal_code ? (
+                      <span className="mono text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                        {p.internal_code}
+                      </span>
+                    ) : (
+                      <span className="text-muted text-xs">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <Badge kind="neutral">{p.category || 'General'}</Badge>
+                  </td>
+                  <td>
+                    <span className="worker-name">
+                      <i className={`dot ${p.assigned_worker === 'Sohel' ? 'blue' : 'teal'}`} />
+                      <span className="font-medium">{p.assigned_worker}</span>
                     </span>
-                  ) : (
-                    <span className="text-muted text-xs">—</span>
-                  )}
-                </td>
-                <td>{p.sort_order}</td>
-                <td>
-                  <StatusBadge value={p.active ? 'Active' : 'Inactive'} />
-                </td>
-                <td className="text-right">
-                  <button
-                    className="small-button mr-2"
-                    onClick={() => {
-                      setEditingProduct(p)
-                      setDialog('product')
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="icon-button text-rose-400 hover:text-rose-600"
-                    title="Deactivate product"
-                    onClick={async () => {
-                      if (window.confirm(`Deactivate product "${p.name}"?`)) {
-                        await deleteProduct(p.id)
-                        refreshProducts()
-                        showToast(`Product "${p.name}" deactivated.`)
-                      }
-                    }}
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  </td>
+                  <td>
+                    {p.bag_family ? (
+                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                        <span>{p.bag_family}</span>
+                        <span className="text-[10px] text-muted">
+                          ({p.raw_3bag_qty || 0}×3B + {p.raw_2bag_qty || 0}×2B)
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-muted text-xs">— Standard</span>
+                    )}
+                  </td>
+                  <td>
+                    <span className="mono text-xs text-muted font-medium">{p.sort_order}</span>
+                  </td>
+                  <td>
+                    <StatusBadge value={p.active ? 'Active' : 'Inactive'} />
+                  </td>
+                  <td className="text-right">
+                    <div className="inline-flex items-center gap-1.5">
+                      <button
+                        className="small-button"
+                        onClick={() => {
+                          setEditingProduct(p)
+                          setDialog('product')
+                        }}
+                      >
+                        <Edit3 size={13} className="mr-1 inline" /> Edit
+                      </button>
+                      <button
+                        className="icon-button text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                        title="Deactivate product"
+                        onClick={async () => {
+                          if (window.confirm(`Are you sure you want to deactivate or remove "${p.name}"?`)) {
+                            await deleteProduct(p.id)
+                            refreshProducts()
+                            revalidateWarehouseData()
+                            showToast(`Product "${p.name}" deactivated.`)
+                          }
+                        }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={8} className="text-center py-12 text-muted">
+                  <Package size={28} className="mx-auto mb-2 text-muted opacity-40" />
+                  <p className="font-medium text-sm">No products found matching your filters</p>
+                  <p className="text-xs text-muted mt-1">Try adjusting your search terms or filters above</p>
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </TableWrap>
       </section>
@@ -3872,7 +4188,8 @@ function ProductsView({ showToast }: any) {
           }}
           onSaved={() => {
             refreshProducts()
-            showToast(editingProduct ? 'Product updated' : 'New product created')
+            revalidateWarehouseData()
+            showToast(editingProduct ? `Product "${editingProduct.name}" updated` : 'New product created')
             setDialog(null)
             setEditingProduct(null)
           }}
@@ -3886,14 +4203,18 @@ function ProductsView({ showToast }: any) {
 // 4. TRAINING CENTER VIEW
 // ----------------------------------------------------------------------
 function TrainingCenterView({ showToast }: any) {
-  const [tab, setTab] = useState<'unknown' | 'rules' | 'history'>('unknown')
+  const [tab, setTab] = useState<'unknown' | 'mapped' | 'rules' | 'history'>('unknown')
   const [selectedSkus, setSelectedSkus] = useState<string[]>([])
   const [trainTargetSku, setTrainTargetSku] = useState<UnknownSkuItem | null>(null)
   const [conflictItem, setConflictItem] = useState<any>(null)
   const [ruleModalOpen, setRuleModalOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [mappedSearch, setMappedSearch] = useState('')
+  const [testSkuInput, setTestSkuInput] = useState('')
 
   const { data: stats, mutate: refreshStats } = useSWR('/training/stats', getTrainingStats)
   const { data: unknowns = [], mutate: refreshUnknowns } = useSWR('/training/unknown', getUnknownSkus)
+  const { data: mappings = [], mutate: refreshMappings } = useSWR('/training/mappings', getSkuMappings)
   const { data: history = [], mutate: refreshHistory } = useSWR('/training/history', getTrainingHistory)
   const { data: rules = [], mutate: refreshRules } = useSWR('/training/rules', getPatternRules)
   const { data: products = [] } = useSWR('/products', () => getProducts(false))
@@ -3906,15 +4227,54 @@ function TrainingCenterView({ showToast }: any) {
 
   const handleBulkTrain = async (productId: number) => {
     if (selectedSkus.length === 0) return
+    const prod = products.find((p) => p.id === productId)
     try {
       await bulkMapSkus({ raw_skus: selectedSkus, product_id: productId })
-      showToast(`Bulk trained ${selectedSkus.length} SKUs successfully!`)
+      showToast(`Bulk trained ${selectedSkus.length} SKUs to "${prod?.name || 'Product'}" successfully!`)
       setSelectedSkus([])
       refreshUnknowns()
+      refreshMappings()
       refreshStats()
       refreshHistory()
+      revalidateWarehouseData()
     } catch (err: any) {
       alert(err.message)
+    }
+  }
+
+  const handleAcceptSuggestion = async (item: UnknownSkuItem) => {
+    if (!item.suggestion) return
+    try {
+      await mapSku({
+        raw_sku: item.raw_sku,
+        product_id: item.suggestion.product_id,
+        optional_worker_override: item.suggestion.worker !== 'Sohel' ? item.suggestion.worker : undefined,
+        remember_mapping: true,
+      })
+      showToast(`Mapped "${item.raw_sku}" ➔ "${item.suggestion.product}"!`)
+      refreshUnknowns()
+      refreshMappings()
+      refreshStats()
+      refreshHistory()
+      revalidateWarehouseData()
+    } catch (err: any) {
+      alert(err.message)
+    }
+  }
+
+  const handleUnmapSku = async (mappingId: number, rawSku: string) => {
+    if (window.confirm(`Unmap rule for SKU "${rawSku}"? This will return it to unclassified.`)) {
+      try {
+        await deleteSkuMapping(mappingId)
+        showToast(`Unmapped SKU "${rawSku}"`)
+        refreshMappings()
+        refreshUnknowns()
+        refreshStats()
+        refreshHistory()
+        revalidateWarehouseData()
+      } catch (err: any) {
+        alert(err.message)
+      }
     }
   }
 
@@ -3923,23 +4283,74 @@ function TrainingCenterView({ showToast }: any) {
       await undoTraining(historyId)
       showToast('Training mapping reverted.')
       refreshUnknowns()
+      refreshMappings()
       refreshStats()
       refreshHistory()
+      revalidateWarehouseData()
     } catch (err: any) {
       alert(err.message)
     }
   }
+
+  // Filtered lists
+  const filteredUnknowns = unknowns.filter((u) =>
+    !searchQuery ||
+    u.raw_sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (u.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (u.suggestion?.product || '').toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const filteredMappings = mappings.filter((m) =>
+    !mappedSearch ||
+    m.raw_sku.toLowerCase().includes(mappedSearch.toLowerCase()) ||
+    (m.product_name || '').toLowerCase().includes(mappedSearch.toLowerCase()) ||
+    (m.category || '').toLowerCase().includes(mappedSearch.toLowerCase()) ||
+    (m.assigned_worker || '').toLowerCase().includes(mappedSearch.toLowerCase())
+  )
+
+  // Pattern rule test engine
+  const matchedTestRule = testSkuInput.trim() ? rules.find((r) => {
+    const raw = testSkuInput.trim().toUpperCase()
+    const val = r.value.toUpperCase()
+    if (r.rule_type === 'starts_with') return raw.startsWith(val)
+    if (r.rule_type === 'ends_with') return raw.endsWith(val)
+    if (r.rule_type === 'contains') return raw.includes(val)
+    if (r.rule_type === 'regex') {
+      try { return new RegExp(r.value, 'i').test(raw) } catch { return false }
+    }
+    return false
+  }) : null
+  const matchedTestProduct = matchedTestRule?.product_id ? products.find((p) => p.id === matchedTestRule.product_id) : null
 
   return (
     <>
       <PageHead
         eyebrow="Catalog / Training Center"
         title="SKU Training & Rule Learning"
-        description="Map unknown Flipkart marketplace SKUs to canonical warehouse products. Train once to automatically classify all future batches."
+        description="Map raw Flipkart marketplace SKUs to canonical warehouse products. Train once to automatically classify and route all future batches."
         action={
           <div className="flex gap-2">
+            <button
+              className="button secondary"
+              title="Sync with VS Code data/sku-rules.json"
+              onClick={async () => {
+                try {
+                  await syncDatabaseWithDisk()
+                  refreshStats()
+                  refreshUnknowns()
+                  refreshMappings()
+                  refreshRules()
+                  refreshHistory()
+                  showToast('Synced with VS Code data/sku-rules.json successfully!')
+                } catch {
+                  showToast('Sync failed')
+                }
+              }}
+            >
+              <RefreshCw size={14} /> Sync VS Code Rules
+            </button>
             <button className="button secondary" onClick={() => setRuleModalOpen(true)}>
-              <Plus size={15} /> Add pattern rule
+              <Plus size={15} /> Add Pattern Rule
             </button>
           </div>
         }
@@ -3948,28 +4359,28 @@ function TrainingCenterView({ showToast }: any) {
       {/* Training Stats Grid */}
       <div className="stats-grid four" id="training-stats-grid">
         <Stat
-          label="Unknown SKUs"
-          value={stats?.unknown_skus ?? 0}
+          label="Unmapped SKUs"
+          value={stats?.unknown_skus ?? unknowns.length}
           note="Need classification"
           icon={Tags}
-          tone="rose"
+          tone={unknowns.length > 0 ? 'rose' : 'teal'}
         />
         <Stat
-          label="Mapped SKUs"
-          value={stats?.mapped_skus ?? 0}
-          note="Active warehouse rules"
+          label="Active SKU Mappings"
+          value={stats?.mapped_skus ?? mappings.length}
+          note="Exact mapped rules"
           icon={Check}
           tone="teal"
         />
         <Stat
-          label="Total SKUs seen"
-          value={stats?.total_unique_skus_seen ?? 0}
-          note="Historical catalog count"
-          icon={Layers}
+          label="Pattern Rules"
+          value={rules.length}
+          note="Prefix / Contains rules"
+          icon={GitBranch}
           tone="blue"
         />
         <Stat
-          label="Recognition rate"
+          label="Recognition Rate"
           value={`${stats?.recognition_percentage ?? 100}%`}
           note="Automatic classification"
           icon={BarChart3}
@@ -3977,81 +4388,136 @@ function TrainingCenterView({ showToast }: any) {
         />
       </div>
 
-      {/* Tabs */}
+      {/* Enhanced 4-Tabs Bar */}
       <div className="tabs">
         <button
           className={`tab ${tab === 'unknown' ? 'active' : ''}`}
           onClick={() => setTab('unknown')}
         >
-          Unmapped SKUs <span>{unknowns.length}</span>
+          Unmapped SKUs{' '}
+          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${unknowns.length > 0 ? 'bg-rose-500/10 text-rose-500' : 'bg-slate-100 text-slate-600'}`}>
+            {unknowns.length}
+          </span>
+        </button>
+        <button
+          className={`tab ${tab === 'mapped' ? 'active' : ''}`}
+          onClick={() => setTab('mapped')}
+        >
+          Active SKU Mappings{' '}
+          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600">
+            {mappings.length}
+          </span>
         </button>
         <button
           className={`tab ${tab === 'rules' ? 'active' : ''}`}
           onClick={() => setTab('rules')}
         >
-          Pattern Rules <span>{rules.length}</span>
+          Pattern Rules{' '}
+          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600">
+            {rules.length}
+          </span>
         </button>
         <button
           className={`tab ${tab === 'history' ? 'active' : ''}`}
           onClick={() => setTab('history')}
         >
-          Training History <span>{history.length}</span>
+          Training Audit Log{' '}
+          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-600">
+            {history.length}
+          </span>
         </button>
       </div>
 
-      {/* Tab 1: Unmapped SKUs */}
+      {/* TAB 1: UNMAPPED SKUS */}
       {tab === 'unknown' && (
         <section className="panel" id="unmapped-skus-panel">
-          <div className="section-head">
+          <div className="section-head flex-wrap gap-3 pb-3 border-b border-border">
             <div>
-              <h2>Unmapped Flipkart SKUs</h2>
-              <p>Description similarity suggestions generated automatically</p>
+              <h2 className="text-base font-bold">Unmapped Flipkart Marketplace SKUs</h2>
+              <p className="text-xs text-muted mt-0.5">
+                Review raw SKUs parsed from batches with AI similarity suggestions. Train each item once to classify all future batches.
+              </p>
             </div>
 
-            {selectedSkus.length > 0 && (
+            <div className="flex items-center gap-3 ml-auto">
+              <div className="search w-64">
+                <Search size={15} />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search unmapped SKUs..."
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="text-xs text-muted">
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Bulk Action Toolbar */}
+          {selectedSkus.length > 0 && (
+            <div className="p-3 my-3 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold">{selectedSkus.length} selected</span>
+                <span className="font-semibold text-xs text-blue-600 dark:text-blue-400">
+                  {selectedSkus.length} SKU{selectedSkus.length > 1 ? 's' : ''} Selected
+                </span>
+                <span className="text-muted text-xs">| Map selected items in one click:</span>
+              </div>
+
+              <div className="flex items-center gap-2">
                 <select
                   id="bulk-product-select"
-                  className="bg-slate-800 text-white text-xs rounded px-2 py-1 border border-slate-700"
+                  className="bg-card text-foreground text-xs rounded-lg px-3 py-1.5 border border-border font-medium"
                   onChange={(e) => {
                     if (e.target.value) handleBulkTrain(Number(e.target.value))
                   }}
                   defaultValue=""
                 >
-                  <option value="" disabled>Train selected as...</option>
+                  <option value="" disabled>
+                    Choose Canonical Product...
+                  </option>
                   {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.category}) — {p.assigned_worker}
+                    </option>
                   ))}
                 </select>
+                <button
+                  className="button secondary text-xs py-1.5"
+                  onClick={() => setSelectedSkus([])}
+                >
+                  Clear Selection
+                </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           <TableWrap>
             <thead>
               <tr>
-                <th style={{ width: 30 }}>
+                <th style={{ width: 32 }}>
                   <input
                     type="checkbox"
-                    checked={selectedSkus.length === unknowns.length && unknowns.length > 0}
+                    checked={filteredUnknowns.length > 0 && selectedSkus.length === filteredUnknowns.length}
                     onChange={(e) => {
-                      if (e.target.checked) setSelectedSkus(unknowns.map((u) => u.raw_sku))
+                      if (e.target.checked) setSelectedSkus(filteredUnknowns.map((u) => u.raw_sku))
                       else setSelectedSkus([])
                     }}
                   />
                 </th>
-                <th>Raw SKU</th>
-                <th>Description</th>
-                <th>Times Seen</th>
-                <th>AI / Fuzzy Suggestion</th>
-                <th>Worker</th>
+                <th>Raw Flipkart SKU</th>
+                <th>Item Description</th>
+                <th>Frequency</th>
+                <th>AI Similarity Suggestion</th>
+                <th>Worker Station</th>
                 <th className="text-right">Action</th>
               </tr>
             </thead>
             <tbody>
-              {unknowns.length > 0 ? (
-                unknowns.map((u) => (
+              {filteredUnknowns.length > 0 ? (
+                filteredUnknowns.map((u) => (
                   <tr key={u.raw_sku}>
                     <td>
                       <input
@@ -4061,52 +4527,77 @@ function TrainingCenterView({ showToast }: any) {
                       />
                     </td>
                     <td>
-                      <strong className="mono">{u.raw_sku}</strong>
+                      <div className="flex items-center gap-2">
+                        <strong className="mono text-xs font-bold text-foreground">{u.raw_sku}</strong>
+                      </div>
                     </td>
                     <td>
-                      <span className="text-xs">{u.description}</span>
+                      <span className="text-xs text-muted line-clamp-1">{u.description || 'Flipkart Item'}</span>
                     </td>
                     <td>
-                      <strong>{u.seen} batches</strong>
+                      <span className="badge badge-neutral font-semibold text-[11px]">
+                        {u.seen || 1} batch{(u.seen || 1) > 1 ? 'es' : ''}
+                      </span>
                     </td>
                     <td>
                       {u.suggestion ? (
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Sparkles size={13} className="text-amber-400" />
-                            <strong>{u.suggestion.product}</strong>
-                            <Badge kind="success">{Math.round(u.suggestion.confidence * 100)}% match</Badge>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <Sparkles size={13} className="text-amber-500" />
+                              <strong className="text-xs font-semibold">{u.suggestion.product}</strong>
+                              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                {Math.round(u.suggestion.confidence * 100)}% match
+                              </span>
+                            </div>
+                            <small className="text-muted text-[10px] block mt-0.5">
+                              Matched: {u.suggestion.matched_terms.join(', ')}
+                            </small>
                           </div>
-                          <small className="text-muted text-[10px]">
-                            Matched: {u.suggestion.matched_terms.join(', ')}
-                          </small>
+
+                          <button
+                            className="small-button text-[11px] px-2 py-1 bg-emerald-600 text-white hover:bg-emerald-700 font-medium shrink-0"
+                            title="1-Click Accept Suggestion"
+                            onClick={() => handleAcceptSuggestion(u)}
+                          >
+                            <Check size={12} className="mr-1 inline" /> Accept
+                          </button>
                         </div>
                       ) : (
-                        <span className="text-muted text-xs">No close match</span>
+                        <span className="text-muted text-xs italic">No confident AI match</span>
                       )}
                     </td>
                     <td>
                       <span className="worker-name">
                         <i className={`dot ${u.suggestion?.worker === 'Kartik Da' ? 'teal' : 'blue'}`} />
-                        {u.suggestion?.worker || 'Sohel'}
+                        <span className="font-medium">{u.suggestion?.worker || 'Sohel'}</span>
                       </span>
                     </td>
                     <td className="text-right">
                       <button
-                        className="small-button"
+                        className="small-button font-medium"
                         id={`train-sku-btn-${u.raw_sku}`}
                         onClick={() => setTrainTargetSku(u)}
                       >
-                        Train SKU
+                        <Edit3 size={12} className="mr-1 inline" /> Train SKU
                       </button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="text-center py-8 text-muted">
-                    <CheckCircle2 size={24} className="mx-auto mb-2 text-emerald-400" />
-                    All Flipkart SKUs in the current batches are recognized and mapped!
+                  <td colSpan={7} className="text-center py-12 text-muted">
+                    <div className="max-w-md mx-auto space-y-2">
+                      <CheckCircle2 size={32} className="mx-auto text-emerald-500" />
+                      <p className="font-semibold text-foreground text-sm">
+                        {searchQuery ? 'No unmapped SKUs match your search query' : 'All Marketplace SKUs Are Classified!'}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {searchQuery
+                          ? 'Try clearing the search query to see all items.'
+                          : 'Every SKU in your current batches is successfully mapped to canonical warehouse products.'}
+                      </p>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -4115,14 +4606,187 @@ function TrainingCenterView({ showToast }: any) {
         </section>
       )}
 
-      {/* Tab 2: Pattern Rules */}
-      {tab === 'rules' && (
-        <section className="panel" id="pattern-rules-panel">
-          <div className="section-head">
+      {/* TAB 2: ACTIVE SKU MAPPINGS */}
+      {tab === 'mapped' && (
+        <section className="panel" id="active-mappings-panel">
+          <div className="section-head flex-wrap gap-3 pb-3 border-b border-border">
             <div>
-              <h2>Pattern rules</h2>
-              <p>Fallback rules executed after exact SKU mapping checks</p>
+              <h2 className="text-base font-bold">Active SKU Learned Mappings ({mappings.length})</h2>
+              <p className="text-xs text-muted mt-0.5">
+                Exact matches currently learned in memory and synchronized with <code className="mono">data/sku-rules.json</code>.
+              </p>
             </div>
+
+            <div className="search w-64 ml-auto">
+              <Search size={15} />
+              <input
+                value={mappedSearch}
+                onChange={(e) => setMappedSearch(e.target.value)}
+                placeholder="Search raw SKU or product..."
+              />
+              {mappedSearch && (
+                <button onClick={() => setMappedSearch('')} className="text-xs text-muted">
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <TableWrap>
+            <thead>
+              <tr>
+                <th>Raw Flipkart SKU</th>
+                <th>Target Warehouse Product</th>
+                <th>Category</th>
+                <th>Assigned Worker</th>
+                <th>Rule Type</th>
+                <th>Times Seen</th>
+                <th>Last Active</th>
+                <th className="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredMappings.length > 0 ? (
+                filteredMappings.map((m) => (
+                  <tr key={m.id}>
+                    <td>
+                      <strong className="mono text-xs font-bold text-foreground">{m.raw_sku}</strong>
+                    </td>
+                    <td>
+                      <strong className="text-sm font-semibold">{m.product_name}</strong>
+                    </td>
+                    <td>
+                      <Badge kind="neutral">{m.category || 'General'}</Badge>
+                    </td>
+                    <td>
+                      <span className="worker-name">
+                        <i className={`dot ${m.assigned_worker === 'Kartik Da' ? 'teal' : 'blue'}`} />
+                        <span className="font-medium">{m.assigned_worker}</span>
+                        {m.worker_override && (
+                          <span className="text-[10px] text-amber-500 font-medium ml-1">(Override)</span>
+                        )}
+                      </span>
+                    </td>
+                    <td>
+                      <Badge kind="success">{m.match_type?.toUpperCase() || 'EXACT'}</Badge>
+                    </td>
+                    <td>
+                      <span className="mono text-xs font-semibold">{m.times_seen || 1} batches</span>
+                    </td>
+                    <td className="text-xs text-muted">
+                      {m.last_seen_at
+                        ? new Date(m.last_seen_at).toLocaleDateString([], { month: 'short', day: 'numeric' })
+                        : '—'}
+                    </td>
+                    <td className="text-right">
+                      <div className="inline-flex items-center gap-1.5">
+                        <button
+                          className="small-button"
+                          onClick={() => {
+                            setTrainTargetSku({
+                              raw_sku: m.raw_sku,
+                              description: `Mapped to ${m.product_name}`,
+                              seen: m.times_seen || 1,
+                              suggestion: {
+                                product_id: m.product_id,
+                                product: m.product_name,
+                                confidence: 1,
+                                matched_terms: ['Exact mapping'],
+                                worker: m.assigned_worker,
+                                category: m.category,
+                              },
+                            })
+                          }}
+                        >
+                          <Edit3 size={12} className="mr-1 inline" /> Re-map
+                        </button>
+                        <button
+                          className="icon-button text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                          title="Unmap SKU"
+                          onClick={() => handleUnmapSku(m.id, m.raw_sku)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8} className="text-center py-12 text-muted">
+                    <Bookmark size={28} className="mx-auto mb-2 text-muted opacity-40" />
+                    <p className="font-medium text-sm">No mapped SKUs found</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </TableWrap>
+        </section>
+      )}
+
+      {/* TAB 3: PATTERN RULES & LIVE SANDBOX */}
+      {tab === 'rules' && (
+        <section className="panel space-y-6" id="pattern-rules-panel">
+          <div className="section-head flex-wrap gap-3 pb-3 border-b border-border">
+            <div>
+              <h2 className="text-base font-bold">Pattern Classification Rules ({rules.length})</h2>
+              <p className="text-xs text-muted mt-0.5">
+                Heuristic pattern matching applied when an exact SKU match is not found in catalog.
+              </p>
+            </div>
+            <button className="button primary ml-auto" onClick={() => setRuleModalOpen(true)}>
+              <Plus size={15} /> Add Pattern Rule
+            </button>
+          </div>
+
+          {/* Live Interactive Pattern Tester */}
+          <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-900 border border-border space-y-3">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-blue-500" />
+              <strong className="text-xs uppercase font-bold tracking-wider text-foreground">
+                Interactive Pattern Rule Sandbox
+              </strong>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                className="w-full text-xs font-mono rounded-lg px-3 py-2 border border-border bg-card text-foreground"
+                placeholder="Type a sample raw SKU to test rules (e.g. GB-17X19-BLK, R1S-BLACK)..."
+                value={testSkuInput}
+                onChange={(e) => setTestSkuInput(e.target.value)}
+              />
+              {testSkuInput && (
+                <button
+                  className="button secondary text-xs py-2"
+                  onClick={() => setTestSkuInput('')}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {testSkuInput.trim() && (
+              <div className="p-3 rounded-lg bg-card border border-border text-xs flex items-center justify-between">
+                {matchedTestRule ? (
+                  <div className="flex items-center gap-3">
+                    <span className="badge badge-success font-bold">MATCH FOUND</span>
+                    <span>
+                      Matches Rule <code className="mono font-bold">"{matchedTestRule.value}"</code> (
+                      {matchedTestRule.rule_type})
+                    </span>
+                    <ArrowRight size={14} className="text-muted" />
+                    <strong>{matchedTestProduct?.name || 'No specific product'}</strong>
+                    <span className="text-muted">
+                      Worker: <strong className="text-foreground">{matchedTestRule.suggested_worker || matchedTestProduct?.assigned_worker || 'Default'}</strong>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-muted">
+                    <AlertTriangle size={15} className="text-amber-500" />
+                    <span>No active pattern rule matched "{testSkuInput}". This SKU would be marked as Unmapped.</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <TableWrap>
@@ -4145,23 +4809,34 @@ function TrainingCenterView({ showToast }: any) {
                       <Badge kind="info">{r.rule_type.replace('_', ' ').toUpperCase()}</Badge>
                     </td>
                     <td>
-                      <strong className="mono">{r.value}</strong>
+                      <strong className="mono text-xs font-bold text-foreground">{r.value}</strong>
                     </td>
-                    <td>{prod?.name || <span className="text-muted">—</span>}</td>
+                    <td>
+                      {prod ? (
+                        <strong className="text-sm font-semibold">{prod.name}</strong>
+                      ) : (
+                        <span className="text-muted text-xs">— Worker Override Only</span>
+                      )}
+                    </td>
                     <td>
                       <span className="worker-name">
                         <i className={`dot ${r.suggested_worker === 'Kartik Da' ? 'teal' : 'blue'}`} />
-                        {r.suggested_worker || 'Auto'}
+                        <span className="font-medium">{r.suggested_worker || 'Auto from Product'}</span>
                       </span>
                     </td>
-                    <td>{r.priority}</td>
+                    <td>
+                      <span className="mono text-xs font-semibold">{r.priority}</span>
+                    </td>
                     <td className="text-right">
                       <button
-                        className="icon-button text-rose-400"
+                        className="icon-button text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                        title="Delete pattern rule"
                         onClick={async () => {
-                          await deletePatternRule(r.id)
-                          refreshRules()
-                          showToast('Pattern rule removed.')
+                          if (window.confirm(`Delete pattern rule "${r.value}"?`)) {
+                            await deletePatternRule(r.id)
+                            refreshRules()
+                            showToast('Pattern rule removed.')
+                          }
                         }}
                       >
                         <Trash2 size={15} />
@@ -4175,69 +4850,100 @@ function TrainingCenterView({ showToast }: any) {
         </section>
       )}
 
-      {/* Tab 3: Training History & Undo */}
+      {/* TAB 4: TRAINING AUDIT LOG */}
       {tab === 'history' && (
         <section className="panel" id="training-history-panel">
-          <div className="section-head">
+          <div className="section-head pb-3 border-b border-border">
             <div>
-              <h2>Training activity audit log</h2>
-              <p>Recent mapping events with instant undo capability</p>
+              <h2 className="text-base font-bold">Training Activity Audit Log</h2>
+              <p className="text-xs text-muted mt-0.5">
+                Audit trail of learned mappings with 1-click instant undo.
+              </p>
             </div>
           </div>
 
           <TableWrap>
             <thead>
               <tr>
-                <th>Time</th>
-                <th>Action</th>
-                <th>Raw SKU</th>
-                <th>New Mapping</th>
+                <th>Timestamp</th>
+                <th>Action Type</th>
+                <th>Raw Flipkart SKU</th>
+                <th>Learned Mapping</th>
                 <th>Assigned Worker</th>
-                <th className="text-right">Undo</th>
+                <th className="text-right">Undo Action</th>
               </tr>
             </thead>
             <tbody>
-              {history.map((h) => (
-                <tr key={h.id}>
-                  <td className="text-xs text-muted">
-                    {new Date(h.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                  <td>
-                    <Badge kind={h.action.includes('Removed') ? 'danger' : 'success'}>{h.action}</Badge>
-                  </td>
-                  <td>
-                    <strong className="mono">{h.raw_sku}</strong>
-                  </td>
-                  <td>{h.new_product_name}</td>
-                  <td>{h.new_worker}</td>
-                  <td className="text-right">
-                    {h.action !== 'Removed Mapping' && (
-                      <button
-                        className="button secondary text-xs py-1"
-                        onClick={() => handleUndo(h.id)}
-                      >
-                        <Undo2 size={13} /> Undo
-                      </button>
-                    )}
+              {history.length > 0 ? (
+                history.map((h) => (
+                  <tr key={h.id}>
+                    <td className="text-xs text-muted whitespace-nowrap">
+                      {new Date(h.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })},{' '}
+                      {new Date(h.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                    </td>
+                    <td>
+                      <Badge kind={h.action.includes('Removed') ? 'danger' : 'success'}>
+                        {h.action}
+                      </Badge>
+                    </td>
+                    <td>
+                      <strong className="mono text-xs font-bold text-foreground">{h.raw_sku}</strong>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-1.5 text-xs font-semibold">
+                        {h.old_product_name && (
+                          <>
+                            <span className="text-muted line-through">{h.old_product_name}</span>
+                            <ArrowRight size={12} className="text-muted" />
+                          </>
+                        )}
+                        <span>{h.new_product_name}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="worker-name">
+                        <i className={`dot ${h.new_worker === 'Kartik Da' ? 'teal' : 'blue'}`} />
+                        <span className="font-medium">{h.new_worker}</span>
+                      </span>
+                    </td>
+                    <td className="text-right">
+                      {h.action !== 'Removed Mapping' && (
+                        <button
+                          className="button secondary text-xs py-1 px-2.5 font-medium"
+                          onClick={() => handleUndo(h.id)}
+                        >
+                          <Undo2 size={13} className="mr-1 inline" /> Undo
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="text-center py-12 text-muted">
+                    <Clock size={28} className="mx-auto mb-2 text-muted opacity-40" />
+                    <p className="font-medium text-sm">No training events recorded yet</p>
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </TableWrap>
         </section>
       )}
 
-      {/* Train Target Modal */}
+      {/* Train Target SKU Modal */}
       {trainTargetSku && (
         <TrainSkuModal
           skuItem={trainTargetSku}
           close={() => setTrainTargetSku(null)}
           onTrained={(mappedName: any) => {
-            showToast(`Trained ${trainTargetSku.raw_sku} → ${mappedName}`)
+            showToast(`Trained "${trainTargetSku.raw_sku}" ➔ "${mappedName}"`)
             setTrainTargetSku(null)
             refreshUnknowns()
+            refreshMappings()
             refreshStats()
             refreshHistory()
+            revalidateWarehouseData()
           }}
           onConflict={(conflict: any) => {
             setConflictItem(conflict)
@@ -4248,48 +4954,62 @@ function TrainingCenterView({ showToast }: any) {
       {/* Conflict Modal */}
       {conflictItem && (
         <Modal title="Mapping Conflict Detected" close={() => setConflictItem(null)}>
-          <div className="warning-box">
-            <AlertTriangle size={20} />
-            <p>
-              This SKU is already mapped to <strong>{conflictItem.existing_product_name}</strong>. Overwriting will change classification for future batches.
-            </p>
-          </div>
+          <div className="space-y-4">
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
+              <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+              <div className="text-xs text-foreground space-y-1">
+                <p className="font-bold">Raw SKU is already assigned to another catalog product</p>
+                <p className="text-muted text-[11px] leading-relaxed">
+                  Overwriting this rule will reassign all future labels matching this SKU to the newly selected product.
+                </p>
+              </div>
+            </div>
 
-          <div className="detail-row">
-            <span>Raw SKU</span>
-            <strong className="mono">{conflictItem.raw_sku}</strong>
-          </div>
-          <div className="detail-row">
-            <span>Existing Product</span>
-            <strong>{conflictItem.existing_product_name}</strong>
-          </div>
-          <div className="detail-row">
-            <span>New Proposed Product</span>
-            <strong className="text-blue-500">{conflictItem.new_product_name}</strong>
-          </div>
+            <div className="form-section space-y-2.5">
+              <div className="flex items-center justify-between py-1.5 border-b border-border text-xs">
+                <span className="text-muted font-medium">Raw Marketplace SKU</span>
+                <span className="font-mono font-bold text-foreground bg-secondary px-2 py-0.5 rounded">{conflictItem.raw_sku}</span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-border text-xs">
+                <span className="text-muted font-medium">Current Assignment</span>
+                <span className="font-semibold text-muted line-through">{conflictItem.existing_product_name}</span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 text-xs">
+                <span className="text-muted font-medium">Proposed New Product</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                  <Check size={14} /> {conflictItem.new_product_name}
+                </span>
+              </div>
+            </div>
 
-          <div className="modal-actions">
-            <button className="button secondary" onClick={() => setConflictItem(null)}>
-              Keep Existing
-            </button>
-            <button
-              className="button primary"
-              onClick={async () => {
-                await mapSku({
-                  raw_sku: conflictItem.raw_sku,
-                  product_id: conflictItem.new_product_id,
-                  replace: true,
-                })
-                setConflictItem(null)
-                setTrainTargetSku(null)
-                refreshUnknowns()
-                refreshStats()
-                refreshHistory()
-                showToast(`Replaced mapping to ${conflictItem.new_product_name}`)
-              }}
-            >
-              Replace Mapping
-            </button>
+            <div className="modal-actions flex items-center justify-between pt-3 border-t border-border">
+              <span className="text-[11px] text-muted">Conflict resolution required</span>
+              <div className="flex items-center gap-2">
+                <button className="button secondary text-xs font-semibold py-2 px-3.5" onClick={() => setConflictItem(null)}>
+                  Keep Existing
+                </button>
+                <button
+                  className="button primary text-xs font-semibold py-2 px-4 flex items-center gap-1.5"
+                  onClick={async () => {
+                    await mapSku({
+                      raw_sku: conflictItem.raw_sku,
+                      product_id: conflictItem.new_product_id,
+                      replace: true,
+                    })
+                    setConflictItem(null)
+                    setTrainTargetSku(null)
+                    refreshUnknowns()
+                    refreshMappings()
+                    refreshStats()
+                    refreshHistory()
+                    revalidateWarehouseData()
+                    showToast(`Replaced mapping to ${conflictItem.new_product_name}`)
+                  }}
+                >
+                  <RefreshCw size={13} /> Overwrite & Replace Mapping
+                </button>
+              </div>
+            </div>
           </div>
         </Modal>
       )}
@@ -4301,8 +5021,9 @@ function TrainingCenterView({ showToast }: any) {
           close={() => setRuleModalOpen(false)}
           onAdded={() => {
             refreshRules()
+            revalidateWarehouseData()
             setRuleModalOpen(false)
-            showToast('Pattern rule added')
+            showToast('Pattern rule added successfully!')
           }}
         />
       )}
@@ -4522,8 +5243,23 @@ function HistoryView({ showToast }: any) {
 function SettingsView({ showToast }: any) {
   const { data: workers = [], mutate: refreshWorkers } = useSWR('/workers', getWorkers)
   const { data: categories = [], mutate: refreshCategories } = useSWR('/categories', getCategories)
+  const { data: dbStats, mutate: refreshDbStats } = useSWR('/database', async () => {
+    try {
+      const res = await fetch('/api/proxy/database/sync')
+      if (res.ok) return await res.json()
+      const fallback = await fetch('/database/sync')
+      return await fallback.json()
+    } catch {
+      return null
+    }
+  })
+
   const [newWorkerName, setNewWorkerName] = useState('')
   const [newWorkerPhone, setNewWorkerPhone] = useState('')
+  const [isClearingLabels, setIsClearingLabels] = useState(false)
+  const [isSyncingDisk, setIsSyncingDisk] = useState(false)
+  const [isResettingDb, setIsResettingDb] = useState(false)
+  const [copiedSnippet, setCopiedSnippet] = useState(false)
 
   const handleAddWorker = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -4533,170 +5269,424 @@ function SettingsView({ showToast }: any) {
       setNewWorkerName('')
       setNewWorkerPhone('')
       refreshWorkers()
+      revalidateWarehouseData()
       showToast(`Worker "${newWorkerName}" added.`)
     } catch (err: any) {
       alert(err.message)
     }
   }
 
+  const handleClearOldLabels = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete all test label batches and shipments?\n\n✓ DELETED: Uploaded batches, shipments, and print logs\n✓ PRESERVED: All SKU mappings, pattern rules, products, recipes, workers, and categories"
+    )
+    if (!confirmed) return
+
+    setIsClearingLabels(true)
+    try {
+      const res = await clearOldLabelData()
+      revalidateWarehouseData()
+      refreshDbStats()
+      showToast("Old label & batch data deleted. All SKU training remains intact!")
+    } catch (err: any) {
+      showToast(`Failed to clear labels: ${err.message || 'Error'}`)
+    } finally {
+      setIsClearingLabels(false)
+    }
+  }
+
+  const handleSyncWithDisk = async () => {
+    setIsSyncingDisk(true)
+    try {
+      const res = await syncDatabaseWithDisk()
+      revalidateWarehouseData()
+      refreshDbStats()
+      refreshWorkers()
+      refreshCategories()
+      showToast("Successfully synced database with VS Code disk files (data/sku-rules.json, data/products.json)!")
+    } catch (err: any) {
+      showToast(`Sync failed: ${err.message || 'Error'}`)
+    } finally {
+      setIsSyncingDisk(false)
+    }
+  }
+
+  const handleResetToDefault = async () => {
+    const confirmed = window.confirm(
+      "Reset entire database to initial factory demo seed?\n\nThis will reset all tables to default sample data."
+    )
+    if (!confirmed) return
+
+    setIsResettingDb(true)
+    try {
+      await resetDatabaseToDefault()
+      revalidateWarehouseData()
+      refreshDbStats()
+      refreshWorkers()
+      refreshCategories()
+      showToast("Database reset to factory demo seed.")
+    } catch (err: any) {
+      showToast(`Reset failed: ${err.message || 'Error'}`)
+    } finally {
+      setIsResettingDb(false)
+    }
+  }
+
+  const handleExportDatabase = async () => {
+    try {
+      const data = await getFullDatabaseExport()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `flipkart_db_export_${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      showToast("Database exported successfully as JSON.")
+    } catch (err: any) {
+      showToast("Failed to export database.")
+    }
+  }
+
+  const sampleSkuRuleJson = `{
+  "sku_mappings": [
+    {
+      "raw_sku": "MY-NEW-SKU-CODE-001",
+      "product_name": "Garbage Bag Roll 17x19",
+      "assigned_worker": "Kartik Da",
+      "match_type": "exact"
+    }
+  ],
+  "pattern_rules": [
+    {
+      "rule_type": "contains",
+      "value": "17X19",
+      "product_name": "Garbage Bag Roll 17x19",
+      "suggested_worker": "Kartik Da",
+      "priority": 15
+    }
+  ]
+}`
+
+  const copySampleJson = () => {
+    navigator.clipboard.writeText(sampleSkuRuleJson)
+    setCopiedSnippet(true)
+    showToast("Sample SKU JSON copied to clipboard!")
+    setTimeout(() => setCopiedSnippet(false), 2000)
+  }
+
   return (
     <>
       <PageHead
         eyebrow="Workspace / Settings"
-        title="Settings & Staff Management"
-        description="Configure warehouse staff, category taxonomy, and operational parameters."
+        title="Settings & Database Management"
+        description="Manage test label data, train SKUs directly in VS Code, and configure warehouse staff and rules."
       />
 
-      <div className="settings-grid">
-        {/* Workers Configuration */}
-        <section className="panel settings-card" id="settings-workers-card">
-          <div className="section-head">
+      <div className="flex flex-col gap-6">
+        {/* Development & Database Lifecycle Management Section */}
+        <section className="panel danger-zone" id="settings-database-card">
+          <div className="section-head mb-3">
             <div>
-              <h2>Warehouse Workers</h2>
-              <p>Staff members assigned to product picking</p>
+              <div className="flex items-center gap-2">
+                <span className="badge badge-danger">Development Tools</span>
+                <h2 className="text-base font-bold">Database & Test Label Cleanup</h2>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Clear test data while preserving all trained SKU rules and product catalogs.
+              </p>
             </div>
-            <Users size={18} />
+            <Database size={20} className="text-rose-500 shrink-0" />
           </div>
 
-          <div className="flex flex-col gap-2">
-            {workers.map((w) => (
-              <div key={w.id} className="setting-person">
-                <div className={`avatar ${w.name.startsWith('S') ? 'blue-avatar' : 'teal-avatar'}`}>
-                  {w.name.substring(0, 2).toUpperCase()}
+          <div className="bg-slate-900/60 dark:bg-slate-950/80 border border-slate-700/50 rounded-lg p-4 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+              <div className="p-2 bg-slate-800/40 rounded border border-slate-700/30">
+                <span className="block text-xs text-slate-400">Batches</span>
+                <strong className="text-lg font-bold text-slate-100">{dbStats?.batches_count ?? 0}</strong>
+              </div>
+              <div className="p-2 bg-slate-800/40 rounded border border-slate-700/30">
+                <span className="block text-xs text-slate-400">Shipments (AWBs)</span>
+                <strong className="text-lg font-bold text-slate-100">{dbStats?.shipments_count ?? 0}</strong>
+              </div>
+              <div className="p-2 bg-emerald-950/30 rounded border border-emerald-800/30">
+                <span className="block text-xs text-emerald-400">Trained SKUs</span>
+                <strong className="text-lg font-bold text-emerald-300">{dbStats?.sku_mappings_count ?? 0}</strong>
+              </div>
+              <div className="p-2 bg-blue-950/30 rounded border border-blue-800/30">
+                <span className="block text-xs text-blue-400">Pattern Rules</span>
+                <strong className="text-lg font-bold text-blue-300">{dbStats?.pattern_rules_count ?? 0}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              id="btn-delete-old-labels"
+              className="button danger"
+              onClick={handleClearOldLabels}
+              disabled={isClearingLabels}
+            >
+              <Trash2 size={15} />
+              {isClearingLabels ? "Deleting Test Data..." : "Delete Old Label Data (Keep Training Data)"}
+            </button>
+
+            <button
+              id="btn-sync-disk-files"
+              className="button secondary"
+              onClick={handleSyncWithDisk}
+              disabled={isSyncingDisk}
+              title="Reload data/sku-rules.json and data/products.json from disk into memory"
+            >
+              <RefreshCw size={15} className={isSyncingDisk ? "animate-spin" : ""} />
+              {isSyncingDisk ? "Syncing..." : "Sync with VS Code Disk Files"}
+            </button>
+
+            <button
+              id="btn-export-db"
+              className="button secondary"
+              onClick={handleExportDatabase}
+              title="Export complete database as JSON backup"
+            >
+              <Download size={15} /> Export db.json
+            </button>
+
+            <button
+              id="btn-reset-factory"
+              className="button danger-outline ml-auto"
+              onClick={handleResetToDefault}
+              disabled={isResettingDb}
+            >
+              <RotateCcw size={14} />
+              {isResettingDb ? "Resetting..." : "Reset Factory Seed"}
+            </button>
+          </div>
+
+          <div className="mt-3 text-xs text-slate-400 flex items-center gap-1.5">
+            <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+            <span>
+              <strong>Safe Cleanup Guarantee:</strong> Clicking &quot;Delete Old Label Data&quot; only purges batch shipments &amp; print history. All SKU mappings, regex pattern rules, products, and categories remain 100% intact.
+            </span>
+          </div>
+        </section>
+
+        {/* Direct VS Code Database & SKU Training Guide */}
+        <section className="panel vscode-guide" id="settings-vscode-guide-card">
+          <div className="section-head mb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="badge badge-info">Developer Guide</span>
+                <h2 className="text-base font-bold">How to Edit Database &amp; Train SKUs Directly from VS Code</h2>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                You can edit products, train SKUs, and define pattern rules directly in your VS Code workspace files.
+              </p>
+            </div>
+            <Code size={20} className="text-blue-500 shrink-0" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 text-xs">
+            <div className="p-3 bg-slate-900/60 dark:bg-slate-950/80 rounded-lg border border-slate-700/50">
+              <div className="flex items-center gap-1.5 font-bold text-blue-400 mb-1">
+                <FileCode size={14} /> 1. SKU Rules File
+              </div>
+              <p className="text-slate-300">
+                Open <code className="text-amber-300 font-mono">/data/sku-rules.json</code> in VS Code to add raw SKU codes and pattern rules.
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-900/60 dark:bg-slate-950/80 rounded-lg border border-slate-700/50">
+              <div className="flex items-center gap-1.5 font-bold text-emerald-400 mb-1">
+                <Package size={14} /> 2. Products Catalog
+              </div>
+              <p className="text-slate-300">
+                Open <code className="text-amber-300 font-mono">/data/products.json</code> to edit product names, bag recipes (3-Bag / 2-Bag), and workers.
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-900/60 dark:bg-slate-950/80 rounded-lg border border-slate-700/50">
+              <div className="flex items-center gap-1.5 font-bold text-purple-400 mb-1">
+                <Zap size={14} /> 3. Live Hot Sync
+              </div>
+              <p className="text-slate-300">
+                After saving files in VS Code, click <strong>&quot;Sync with VS Code Disk Files&quot;</strong> or process any label to apply instantly.
+              </p>
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="flex justify-between items-center bg-slate-950 px-3 py-2 rounded-t-lg border-t border-x border-slate-800 text-xs text-slate-400">
+              <span className="font-mono text-slate-300">data/sku-rules.json (Example Schema)</span>
+              <button
+                className="button secondary text-xs py-1 px-2.5"
+                onClick={copySampleJson}
+                title="Copy sample JSON structure"
+              >
+                <Copy size={13} /> {copiedSnippet ? "Copied!" : "Copy JSON Snippet"}
+              </button>
+            </div>
+            <pre className="code-preview rounded-t-none border-t-0 mt-0">
+              {sampleSkuRuleJson}
+            </pre>
+          </div>
+        </section>
+
+        {/* Existing Settings Grid */}
+        <div className="settings-grid">
+          {/* Workers Configuration */}
+          <section className="panel settings-card" id="settings-workers-card">
+            <div className="section-head">
+              <div>
+                <h2>Warehouse Workers</h2>
+                <p>Staff members assigned to product picking</p>
+              </div>
+              <Users size={18} />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {workers.map((w) => (
+                <div key={w.id} className="setting-person">
+                  <div className={`avatar ${w.name.startsWith('S') ? 'blue-avatar' : 'teal-avatar'}`}>
+                    {w.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <strong>{w.name}</strong>
+                    <span>{w.active ? 'Active on floor' : 'Inactive'} • {w.phone || 'No phone'}</span>
+                  </div>
+                  {w.active && (
+                    <button
+                      className="icon-button text-slate-400 hover:text-rose-500"
+                      title="Deactivate worker"
+                      onClick={async () => {
+                        if (window.confirm(`Deactivate ${w.name}?`)) {
+                          await deleteWorker(w.id)
+                          refreshWorkers()
+                          revalidateWarehouseData()
+                          showToast(`${w.name} deactivated`)
+                        }
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
-                <div>
-                  <strong>{w.name}</strong>
-                  <span>{w.active ? 'Active on floor' : 'Inactive'} • {w.phone || 'No phone'}</span>
-                </div>
-                {w.active && (
+              ))}
+            </div>
+
+            <form onSubmit={handleAddWorker} className="mt-4 pt-3 border-t border-slate-700/30 flex gap-2">
+              <input
+                placeholder="New worker name..."
+                value={newWorkerName}
+                onChange={(e) => setNewWorkerName(e.target.value)}
+                className="flex-1"
+                required
+              />
+              <button type="submit" className="button primary">
+                <Plus size={15} /> Add
+              </button>
+            </form>
+          </section>
+
+          {/* Categories Configuration */}
+          <section className="panel settings-card" id="settings-categories-card">
+            <div className="section-head">
+              <div>
+                <h2>Product Categories</h2>
+                <p>Warehouse organizational groups</p>
+              </div>
+              <Package size={18} />
+            </div>
+
+            <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
+              {categories.map((c) => (
+                <div key={c.id} className="setting-person">
+                  <div>
+                    <strong>{c.name}</strong>
+                    <span>{c.description || 'Standard category'}</span>
+                  </div>
                   <button
                     className="icon-button text-slate-400 hover:text-rose-500"
-                    title="Deactivate worker"
                     onClick={async () => {
-                      if (window.confirm(`Deactivate ${w.name}?`)) {
-                        await deleteWorker(w.id)
-                        refreshWorkers()
-                        showToast(`${w.name} deactivated`)
+                      if (window.confirm(`Delete category ${c.name}?`)) {
+                        await deleteCategory(c.id)
+                        refreshCategories()
+                        revalidateWarehouseData()
+                        showToast(`Category ${c.name} deleted`)
                       }
                     }}
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={15} />
                   </button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <form onSubmit={handleAddWorker} className="mt-4 pt-3 border-t border-slate-700/30 flex gap-2">
-            <input
-              placeholder="New worker name..."
-              value={newWorkerName}
-              onChange={(e) => setNewWorkerName(e.target.value)}
-              className="flex-1"
-              required
-            />
-            <button type="submit" className="button primary">
-              <Plus size={15} /> Add
-            </button>
-          </form>
-        </section>
-
-        {/* Categories Configuration */}
-        <section className="panel settings-card" id="settings-categories-card">
-          <div className="section-head">
-            <div>
-              <h2>Product Categories</h2>
-              <p>Warehouse organizational groups</p>
-            </div>
-            <Package size={18} />
-          </div>
-
-          <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
-            {categories.map((c) => (
-              <div key={c.id} className="setting-person">
-                <div>
-                  <strong>{c.name}</strong>
-                  <span>{c.description || 'Standard category'}</span>
                 </div>
-                <button
-                  className="icon-button text-slate-400 hover:text-rose-500"
-                  onClick={async () => {
-                    if (window.confirm(`Delete category ${c.name}?`)) {
-                      await deleteCategory(c.id)
-                      refreshCategories()
-                      showToast(`Category ${c.name} deleted`)
-                    }
-                  }}
-                >
-                  <Trash2 size={15} />
-                </button>
+              ))}
+            </div>
+          </section>
+
+          {/* Garbage Bag Families (PackCalc) */}
+          <section className="panel settings-card" id="settings-packcalc-card">
+            <div className="section-head">
+              <div>
+                <h2>Garbage Bag Families (PackCalc)</h2>
+                <p>Formula rules for raw roll stock requirements</p>
               </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Garbage Bag Families (PackCalc) */}
-        <section className="panel settings-card" id="settings-packcalc-card">
-          <div className="section-head">
-            <div>
-              <h2>Garbage Bag Families (PackCalc)</h2>
-              <p>Formula rules for raw roll stock requirements</p>
+              <Archive size={18} />
             </div>
-            <Archive size={18} />
-          </div>
 
-          <div className="setting-person">
-            <div className="material-icon amber"><Archive size={16} /></div>
-            <div>
-              <strong>Averx Family</strong>
-              <span>Algorithm: floor(qty/14) 3-Bags + remainder logic</span>
+            <div className="setting-person">
+              <div className="material-icon amber"><Archive size={16} /></div>
+              <div>
+                <strong>Averx Family</strong>
+                <span>Algorithm: floor(qty/14) 3-Bags + remainder logic</span>
+              </div>
             </div>
-          </div>
 
-          <div className="setting-person">
-            <div className="material-icon blue"><Archive size={16} /></div>
-            <div>
-              <strong>Star Family</strong>
-              <span>Standard: 4 × 3-Bag per finished pack</span>
+            <div className="setting-person">
+              <div className="material-icon blue"><Archive size={16} /></div>
+              <div>
+                <strong>Star Family</strong>
+                <span>Standard: 4 × 3-Bag per finished pack</span>
+              </div>
             </div>
-          </div>
 
-          <div className="setting-person">
-            <div className="material-icon slate"><Archive size={16} /></div>
-            <div>
-              <strong>Plain Garbage Bag Family</strong>
-              <span>Standard: 2 × 3-Bag + 1 × 2-Bag per unit</span>
+            <div className="setting-person">
+              <div className="material-icon slate"><Archive size={16} /></div>
+              <div>
+                <strong>Plain Garbage Bag Family</strong>
+                <span>Standard: 2 × 3-Bag + 1 × 2-Bag per unit</span>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* General Settings */}
-        <section className="panel settings-card" id="settings-general-card">
-          <div className="section-head">
-            <div>
-              <h2>Warehouse System Config</h2>
-              <p>Printing & layout defaults</p>
+          {/* General Settings */}
+          <section className="panel settings-card" id="settings-general-card">
+            <div className="section-head">
+              <div>
+                <h2>Warehouse System Config</h2>
+                <p>Printing & layout defaults</p>
+              </div>
+              <SettingsIcon size={18} />
             </div>
-            <SettingsIcon size={18} />
-          </div>
 
-          <label>
-            Warehouse Location
-            <input defaultValue="Kolkata Unit 6 - Chowbaga West" />
-          </label>
+            <label>
+              Warehouse Location
+              <input defaultValue="Kolkata Unit 6 - Chowbaga West" />
+            </label>
 
-          <label>
-            Label Output Crop Format
-            <select defaultValue="4x6">
-              <option value="4x6">Standard 4×6 inches (Thermal Shipping Label)</option>
-              <option value="A6">A6 Document Sheet</option>
-            </select>
-          </label>
+            <label>
+              Label Output Crop Format
+              <select defaultValue="4x6">
+                <option value="4x6">Standard 4×6 inches (Thermal Shipping Label)</option>
+                <option value="A6">A6 Document Sheet</option>
+              </select>
+            </label>
 
-          <button className="button primary self-start" onClick={() => showToast('Settings saved successfully.')}>
-            Save Preferences
-          </button>
-        </section>
+            <button className="button primary self-start" onClick={() => showToast('Settings saved successfully.')}>
+              Save Preferences
+            </button>
+          </section>
+        </div>
       </div>
     </>
   )
@@ -4725,15 +5715,35 @@ function Modal({ title, close, children }: any) {
   )
 }
 
-function ModalActions({ close, primary, onPrimary, loading }: any) {
+function ModalActions({ close, primary = 'Save Changes', onPrimary, loading, secondary = 'Cancel' }: any) {
   return (
-    <div className="modal-actions">
-      <button className="button secondary" onClick={close} type="button" disabled={loading}>
-        Cancel
-      </button>
-      <button className="button primary" onClick={onPrimary} type="submit" disabled={loading}>
-        {loading ? 'Saving...' : primary}
-      </button>
+    <div className="modal-actions flex items-center justify-between pt-4 mt-4 border-t border-border">
+      <div className="flex items-center gap-1.5 text-[11px] text-muted select-none">
+        <span>Press</span>
+        <kbd className="kbd">Esc</kbd>
+        <span>to cancel</span>
+      </div>
+      <div className="flex items-center gap-2.5">
+        <button className="button secondary text-xs font-semibold py-2 px-3.5" onClick={close} type="button" disabled={loading}>
+          {secondary}
+        </button>
+        <button
+          className="button primary text-xs font-semibold py-2 px-4 flex items-center gap-1.5"
+          onClick={onPrimary}
+          type="submit"
+          disabled={loading}
+        >
+          {loading ? (
+            <>
+              <RefreshCw size={13} className="animate-spin" /> Saving...
+            </>
+          ) : (
+            <>
+              <Check size={14} /> {primary}
+            </>
+          )}
+        </button>
+      </div>
     </div>
   )
 }
@@ -4978,25 +5988,61 @@ function KeyboardShortcutsModal({ close, go, onProcess, onExport, onClearAll, on
 }
 
 function TrainSkuModal({ skuItem, close, onTrained, onConflict }: any) {
-  const { data: products = [] } = useSWR('/products', () => getProducts(false))
+  const { data: products = [], mutate: refreshProducts } = useSWR('/products', () => getProducts(false))
+  const { data: categories = [], mutate: refreshCategories } = useSWR('/categories', getCategories)
+  const { data: workers = [] } = useSWR('/workers', getWorkers)
+
   const [selectedProductId, setSelectedProductId] = useState<number>(
     skuItem.suggestion?.product_id || (products[0]?.id ?? 1)
   )
-  const [overrideWorker, setOverrideWorker] = useState<string>('')
+  const [overrideWorker, setOverrideWorker] = useState<string>(
+    skuItem.suggestion?.worker && skuItem.suggestion.worker !== 'Sohel' ? skuItem.suggestion.worker : ''
+  )
+  const [rememberMapping, setRememberMapping] = useState(true)
   const [loading, setLoading] = useState(false)
+
+  // Inline "Create New Product" sub-mode
+  const [isCreatingNew, setIsCreatingNew] = useState(false)
+  const [newProdName, setNewProdName] = useState(skuItem.description || '')
+  const [newProdCode, setNewProdCode] = useState(skuItem.raw_sku.slice(0, 8))
+  const [newProdCategory, setNewProdCategory] = useState('Tripod')
+  const [newProdWorker, setNewProdWorker] = useState('Sohel')
 
   const chosenProduct = products.find((p) => p.id === selectedProductId) || products[0]
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!chosenProduct) return
     setLoading(true)
     try {
+      let targetProductId = selectedProductId
+
+      // If user chose to create a new product inline
+      if (isCreatingNew) {
+        if (!newProdName.trim()) {
+          alert('Please enter a product name')
+          setLoading(false)
+          return
+        }
+        const created = await createProduct({
+          name: newProdName.trim(),
+          internal_code: newProdCode.trim() || null,
+          category: newProdCategory,
+          assigned_worker: newProdWorker,
+          sort_order: 10,
+          active: true,
+        })
+        targetProductId = created.id
+        await refreshProducts()
+        revalidateWarehouseData()
+      }
+
+      const prod = products.find((p) => p.id === targetProductId) || { name: newProdName }
+
       const res = await mapSku({
         raw_sku: skuItem.raw_sku,
-        product_id: chosenProduct.id,
+        product_id: targetProductId,
         optional_worker_override: overrideWorker || undefined,
-        remember_mapping: true,
+        remember_mapping: rememberMapping,
       })
 
       if (res.status === 'conflict') {
@@ -5004,14 +6050,14 @@ function TrainSkuModal({ skuItem, close, onTrained, onConflict }: any) {
           onConflict({
             raw_sku: skuItem.raw_sku,
             existing_product_name: res.existing_product_name,
-            new_product_id: chosenProduct.id,
-            new_product_name: chosenProduct.name,
+            new_product_id: targetProductId,
+            new_product_name: prod.name,
           })
         }
         return
       }
 
-      onTrained(chosenProduct.name)
+      onTrained(prod.name)
     } catch (err: any) {
       alert(err.message)
     } finally {
@@ -5020,81 +6066,286 @@ function TrainSkuModal({ skuItem, close, onTrained, onConflict }: any) {
   }
 
   return (
-    <Modal title="Train Flipkart SKU" close={close}>
-      <form onSubmit={handleSubmit}>
-        <div className="sku-callout">
-          <span>Raw SKU</span>
-          <strong className="mono">{skuItem.raw_sku}</strong>
-          <span>Description</span>
-          <strong>{skuItem.description || 'Flipkart Product'}</strong>
-          <span>Seen Count</span>
-          <strong>{skuItem.seen || 1} batches</strong>
+    <div className="modal-backdrop">
+      <div className="modal max-w-2xl w-full">
+        <div className="modal-head pb-3 border-b border-border">
+          <div>
+            <p className="eyebrow text-blue-500 font-semibold flex items-center gap-1.5 text-xs">
+              <Sparkles size={14} /> Machine Learning & Catalog Mapping
+            </p>
+            <h2 className="text-lg font-bold text-foreground mt-0.5">Train Marketplace SKU</h2>
+          </div>
+          <button className="icon-button" onClick={close} title="Close (Esc)">
+            <X size={18} />
+          </button>
         </div>
 
-        <label>
-          What canonical product is this?
-          <select
-            value={selectedProductId}
-            onChange={(e) => setSelectedProductId(Number(e.target.value))}
-            className="w-full"
-          >
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.category}) — {p.assigned_worker}
-              </option>
-            ))}
-          </select>
-        </label>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          {/* Target Raw SKU Callout */}
+          <div className="sku-callout bg-slate-900 border border-slate-700 text-slate-100 p-4 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Raw Marketplace SKU</span>
+                <p className="font-mono text-base font-bold text-blue-400 mt-0.5">{skuItem.raw_sku}</p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Batch Frequency</span>
+                <p className="text-xs font-semibold text-slate-200 mt-0.5">{skuItem.seen || 1} Batch{(skuItem.seen || 1) > 1 ? 'es' : ''} Observed</p>
+              </div>
+            </div>
 
-        {chosenProduct && (
-          <div className="inherit">
-            <div>
-              <span>Assigned Worker</span>
-              <strong>{chosenProduct.assigned_worker}</strong>
+            {skuItem.description && (
+              <div className="pt-2 border-t border-slate-800">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Item Description</span>
+                <p className="text-xs text-slate-300 line-clamp-2 mt-0.5">{skuItem.description}</p>
+              </div>
+            )}
+          </div>
+
+          {/* AI Suggestion Banner if available */}
+          {skuItem.suggestion && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-amber-500/20 text-amber-500 shrink-0">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <strong className="text-xs font-bold text-foreground">AI Suggestion: {skuItem.suggestion.product}</strong>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                      {Math.round(skuItem.suggestion.confidence * 100)}% match
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-muted block mt-0.5">
+                    Matched: {skuItem.suggestion.matched_terms.join(', ')} • Worker: {skuItem.suggestion.worker}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="button primary text-xs py-1.5 px-3 font-semibold shrink-0"
+                onClick={() => {
+                  setSelectedProductId(skuItem.suggestion.product_id)
+                  if (skuItem.suggestion.worker && skuItem.suggestion.worker !== 'Sohel') {
+                    setOverrideWorker(skuItem.suggestion.worker)
+                  }
+                  setIsCreatingNew(false)
+                }}
+              >
+                Apply Suggestion
+              </button>
             </div>
-            <div>
-              <span>Category</span>
-              <strong>{chosenProduct.category || 'General'}</strong>
+          )}
+
+          {/* Mode Selector Cards */}
+          <div className="grid grid-cols-2 gap-2.5 pt-1">
+            <div
+              onClick={() => setIsCreatingNew(false)}
+              className={`card-radio flex items-center gap-2.5 cursor-pointer ${
+                !isCreatingNew ? 'active' : ''
+              }`}
+            >
+              <Package size={16} className={!isCreatingNew ? 'text-blue-500' : 'text-muted'} />
+              <div>
+                <strong className="text-xs font-bold block text-foreground">Map to Existing Product</strong>
+                <span className="text-[10.5px] text-muted block">Select from {products.length} catalog items</span>
+              </div>
             </div>
-            <div>
-              <span>PackCalc Recipe</span>
-              <strong>
-                {chosenProduct.bag_family
-                  ? `${chosenProduct.bag_family} (${chosenProduct.raw_3bag_qty || 0}×3B)`
-                  : '—'}
-              </strong>
+
+            <div
+              onClick={() => setIsCreatingNew(true)}
+              className={`card-radio flex items-center gap-2.5 cursor-pointer ${
+                isCreatingNew ? 'active' : ''
+              }`}
+            >
+              <PlusCircle size={16} className={isCreatingNew ? 'text-blue-500' : 'text-muted'} />
+              <div>
+                <strong className="text-xs font-bold block text-foreground">Create New Product</strong>
+                <span className="text-[10.5px] text-muted block">Register new canonical item</span>
+              </div>
             </div>
           </div>
-        )}
 
-        <label className="mt-3">
-          Optional Worker Override
-          <input
-            placeholder="Leave blank to inherit from product"
-            value={overrideWorker}
-            onChange={(e) => setOverrideWorker(e.target.value)}
+          {!isCreatingNew ? (
+            <div className="form-section space-y-3">
+              <div className="form-group">
+                <label className="text-xs font-semibold text-foreground">
+                  Canonical Warehouse Product *
+                </label>
+                <select
+                  value={selectedProductId}
+                  onChange={(e) => setSelectedProductId(Number(e.target.value))}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                >
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} [{p.internal_code || 'No Code'}] — {p.category || 'General'} ({p.assigned_worker})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Product Property Preview Card */}
+              {chosenProduct && (
+                <div className="p-3 rounded-lg bg-card border border-border grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <span className="text-[10px] text-muted uppercase font-bold block">Assigned Worker</span>
+                    <span className="worker-name mt-1">
+                      <i className={`dot ${chosenProduct.assigned_worker === 'Sohel' ? 'blue' : 'teal'}`} />
+                      <span className="font-semibold">{chosenProduct.assigned_worker}</span>
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted uppercase font-bold block">Category</span>
+                    <span className="badge badge-neutral mt-1">{chosenProduct.category || 'General'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted uppercase font-bold block">PackCalc Recipe</span>
+                    <span className="font-semibold text-[11px] text-foreground mt-1 block">
+                      {chosenProduct.bag_family
+                        ? `${chosenProduct.bag_family} (${chosenProduct.raw_3bag_qty || 0}×3B + ${chosenProduct.raw_2bag_qty || 0}×2B)`
+                        : '— Standard'}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="form-section space-y-3.5">
+              <h3 className="form-section-title text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                <Tag size={13} className="text-blue-500" /> New Product Definition
+              </h3>
+
+              <div className="form-group">
+                <label className="text-xs font-semibold text-foreground">
+                  Product Name *
+                </label>
+                <input
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  placeholder="e.g. R1S Selfie Stick with Tripod"
+                  value={newProdName}
+                  onChange={(e) => setNewProdName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="form-group">
+                  <label className="text-xs font-semibold text-foreground">Internal Code</label>
+                  <input
+                    className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-border bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    placeholder="e.g. R1S"
+                    value={newProdCode}
+                    onChange={(e) => setNewProdCode(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="text-xs font-semibold text-foreground">Category</label>
+                  <select
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    value={newProdCategory}
+                    onChange={(e) => setNewProdCategory(e.target.value)}
+                  >
+                    {categories.map((c: any) => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="text-xs font-semibold text-foreground">Picking Station</label>
+                  <select
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    value={newProdWorker}
+                    onChange={(e) => setNewProdWorker(e.target.value)}
+                  >
+                    {workers.map((w: any) => (
+                      <option key={w.id} value={w.name}>{w.name} Station</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Worker Override Field Card */}
+          <div className="form-section space-y-2.5">
+            <h3 className="form-section-title text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
+              <Users size={13} className="text-teal-500" /> Floor Worker Routing
+            </h3>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div
+                onClick={() => setOverrideWorker('')}
+                className={`card-radio p-2.5 cursor-pointer ${
+                  overrideWorker === '' ? 'active' : ''
+                }`}
+              >
+                <span className="text-xs font-bold block text-foreground">Inherit from Product</span>
+                <span className="text-[10px] text-muted block mt-0.5">Automatic default</span>
+              </div>
+
+              <div
+                onClick={() => setOverrideWorker('Sohel')}
+                className={`card-radio p-2.5 cursor-pointer ${
+                  overrideWorker === 'Sohel' ? 'active' : ''
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <i className="dot blue" />
+                  <span className="text-xs font-bold text-foreground">Sohel</span>
+                </div>
+                <span className="text-[10px] text-muted block mt-0.5">Station A (Accessories)</span>
+              </div>
+
+              <div
+                onClick={() => setOverrideWorker('Kartik Da')}
+                className={`card-radio p-2.5 cursor-pointer ${
+                  overrideWorker === 'Kartik Da' ? 'active' : ''
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <i className="dot teal" />
+                  <span className="text-xs font-bold text-foreground">Kartik Da</span>
+                </div>
+                <span className="text-[10px] text-muted block mt-0.5">Station B (Bulk Goods)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Persistence Options */}
+          <div className="p-3 rounded-xl bg-card border border-border">
+            <label className="flex items-center gap-2.5 text-xs font-medium text-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={rememberMapping}
+                onChange={(e) => setRememberMapping(e.target.checked)}
+                className="rounded border-border text-blue-600 focus:ring-blue-500 h-4 w-4"
+              />
+              <div>
+                <strong className="block text-foreground">Remember this mapping for all future batches</strong>
+                <span className="text-[11px] text-muted block">Creates an active training rule that auto-classifies incoming labels</span>
+              </div>
+            </label>
+          </div>
+
+          <ModalActions
+            close={close}
+            primary={isCreatingNew ? 'Create & Train SKU' : 'Save & Train SKU'}
+            loading={loading}
           />
-        </label>
-
-        <label className="check mt-4">
-          <input type="checkbox" defaultChecked />
-          Remember this mapping for all future labels
-        </label>
-
-        <ModalActions
-          close={close}
-          primary="Save & Train Mapping"
-          loading={loading}
-        />
-      </form>
-    </Modal>
+        </form>
+      </div>
+    </div>
   )
 }
 
 function ProductModal({ product, categories, workers, close, onSaved }: any) {
   const [name, setName] = useState(product?.name || '')
   const [internalCode, setInternalCode] = useState(product?.internal_code || '')
-  const [category, setCategory] = useState(product?.category || 'Tripod')
+  const [category, setCategory] = useState(product?.category || categories[0]?.name || 'Tripod')
   const [worker, setWorker] = useState(product?.assigned_worker || 'Sohel')
   const [sortOrder, setSortOrder] = useState(product?.sort_order ?? 10)
   const [bagFamily, setBagFamily] = useState(product?.bag_family || '')
@@ -5137,127 +6388,230 @@ function ProductModal({ product, categories, workers, close, onSaved }: any) {
   }
 
   return (
-    <Modal title={product ? 'Edit Warehouse Product' : 'Add Canonical Product'} close={close}>
-      <form onSubmit={handleSubmit}>
-        <label>
-          Product Name
-          <input
-            placeholder="e.g. R1S Selfie Stick"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-        </label>
-
-        <div className="form-grid">
-          <label>
-            Internal Code
-            <input
-              placeholder="e.g. R1S"
-              value={internalCode}
-              onChange={(e) => setInternalCode(e.target.value)}
-            />
-          </label>
-          <label>
-            Category
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              {categories.map((c: ApiCategory) => (
-                <option key={c.id} value={c.name}>{c.name}</option>
-              ))}
-            </select>
-          </label>
+    <div className="modal-backdrop">
+      <div className="modal max-w-2xl w-full">
+        <div className="modal-head pb-3 border-b border-border">
+          <div>
+            <p className="eyebrow text-blue-500 font-semibold flex items-center gap-1.5 text-xs">
+              <Package size={14} /> Warehouse Catalog
+            </p>
+            <h2 className="text-lg font-bold text-foreground mt-0.5">
+              {product ? `Edit Product: ${product.name}` : 'Add Canonical Warehouse Product'}
+            </h2>
+          </div>
+          <button className="icon-button" onClick={close} title="Close (Esc)">
+            <X size={18} />
+          </button>
         </div>
 
-        <div className="form-grid">
-          <label>
-            Assigned Worker (Inheritance)
-            <select value={worker} onChange={(e) => setWorker(e.target.value)}>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          {/* Section 1: Identification */}
+          <div className="form-section space-y-3">
+            <h3 className="form-section-title text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
+              <Tag size={13} className="text-blue-500" /> Product Details & Classification
+            </h3>
+
+            <div className="form-group">
+              <label className="text-xs font-semibold text-foreground">
+                Product Name *
+              </label>
+              <input
+                className="w-full px-3.5 py-2 text-xs rounded-lg border border-border bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                placeholder="e.g. R1S Selfie Stick with Tripod"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="form-group">
+                <label className="text-xs font-semibold text-foreground">Internal Code</label>
+                <input
+                  className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-border bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  placeholder="e.g. R1S or AX6"
+                  value={internalCode}
+                  onChange={(e) => setInternalCode(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="text-xs font-semibold text-foreground">Category</label>
+                <select
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  {categories.map((c: ApiCategory) => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="text-xs font-semibold text-foreground">Sort Priority Order</label>
+                <input
+                  className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-border bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  type="number"
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(Number(e.target.value))}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Picking Station Assignment */}
+          <div className="form-section space-y-3">
+            <h3 className="form-section-title text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
+              <Users size={13} className="text-teal-500" /> Floor Picking Station
+            </h3>
+
+            <div className="grid grid-cols-2 gap-3">
               {workers.map((w: ApiWorker) => (
-                <option key={w.id} value={w.name}>{w.name}</option>
+                <div
+                  key={w.id}
+                  onClick={() => setWorker(w.name)}
+                  className={`card-radio cursor-pointer transition-all ${
+                    worker === w.name ? 'active' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <i className={`dot ${w.name === 'Sohel' ? 'blue' : 'teal'}`} />
+                    <strong className="text-xs font-bold text-foreground">{w.name}</strong>
+                    {worker === w.name && (
+                      <span className="badge badge-success ml-auto text-[10px]">Assigned</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted mt-1.5">
+                    {w.name === 'Sohel' ? 'Station A: Primary picking & electronic accessories' : 'Station B: Secondary picking & bulk/heavy goods'}
+                  </p>
+                </div>
               ))}
-            </select>
-          </label>
-          <label>
-            Sort Order
-            <input
-              type="number"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(Number(e.target.value))}
-            />
-          </label>
-        </div>
+            </div>
+          </div>
 
-        {/* PackCalc Recipe fields */}
-        <div className="mt-3 p-3 bg-slate-800/40 rounded-lg border border-slate-700/50">
-          <p className="text-xs font-semibold mb-2">PackCalc Raw Material Recipe (Optional)</p>
-          <div className="form-grid">
-            <label>
-              Garbage Bag Family
-              <select value={bagFamily} onChange={(e) => setBagFamily(e.target.value)}>
-                <option value="">None (Standard product)</option>
-                <option value="Star">Star Family</option>
-                <option value="Averx">Averx Family</option>
-                <option value="Plain">Plain Family</option>
-              </select>
-            </label>
+          {/* Section 3: PackCalc Bag Recipe */}
+          <div className="form-section space-y-3 bg-amber-500/5 p-4 rounded-xl border border-amber-500/25">
+            <div className="flex items-center justify-between">
+              <h3 className="form-section-title text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5 mb-0">
+                <Calculator size={13} /> PackCalc Raw Material Recipe (Garbage Bags)
+              </h3>
+              <span className="text-[10px] text-muted font-medium">Optional stock formula</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 pt-1">
+              <div className="form-group">
+                <label className="text-xs font-semibold text-foreground">Bag Family</label>
+                <select
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground font-medium focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  value={bagFamily}
+                  onChange={(e) => setBagFamily(e.target.value)}
+                >
+                  <option value="">None (Standard Product)</option>
+                  <option value="Star">Star Family</option>
+                  <option value="Averx">Averx Family</option>
+                  <option value="Plain">Plain Family</option>
+                </select>
+              </div>
+
+              {bagFamily && (
+                <>
+                  <div className="form-group">
+                    <label className="text-xs font-semibold text-foreground">3-Bag Rolls Required</label>
+                    <input
+                      className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-border bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                      type="number"
+                      value={raw3Bag}
+                      onChange={(e) => setRaw3Bag(Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="text-xs font-semibold text-foreground">2-Bag Rolls Required</label>
+                    <input
+                      className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-border bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                      type="number"
+                      value={raw2Bag}
+                      onChange={(e) => setRaw2Bag(Number(e.target.value))}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
             {bagFamily && (
-              <div className="grid grid-cols-2 gap-2">
-                <label>
-                  3-Bag Qty
-                  <input
-                    type="number"
-                    value={raw3Bag}
-                    onChange={(e) => setRaw3Bag(Number(e.target.value))}
-                  />
-                </label>
-                <label>
-                  2-Bag Qty
-                  <input
-                    type="number"
-                    value={raw2Bag}
-                    onChange={(e) => setRaw2Bag(Number(e.target.value))}
-                  />
-                </label>
+              <div className="p-2.5 rounded-lg bg-card border border-border text-[11px] text-muted flex items-center gap-2">
+                <Sparkles size={13} className="text-amber-500 shrink-0" />
+                <span>
+                  <strong>Recipe Formula:</strong> 1 finished unit of {name || 'this product'} computes as{' '}
+                  <strong className="text-foreground">{raw3Bag} rolls of 3-Bag</strong> and{' '}
+                  <strong className="text-foreground">{raw2Bag} rolls of 2-Bag</strong> in dispatch summary.
+                </span>
               </div>
             )}
           </div>
-        </div>
 
-        <label className="mt-3">
-          Notes / Specs
-          <input
-            placeholder="Special packing notes..."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+          {/* Section 4: Notes & Status */}
+          <div className="form-section space-y-3">
+            <div className="form-group">
+              <label className="text-xs font-semibold text-foreground">Special Packing Notes / Specs</label>
+              <textarea
+                rows={2}
+                className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                placeholder="e.g. Include warranty card, bubble-wrap head, place in size-3 corrugated box..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
+
+            <div className="p-3 rounded-lg bg-card border border-border">
+              <label className="flex items-center gap-2.5 text-xs font-medium text-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={(e) => setActive(e.target.checked)}
+                  className="rounded border-border text-blue-600 focus:ring-blue-500 h-4 w-4"
+                />
+                <div>
+                  <strong className="block text-foreground">Active canonical product</strong>
+                  <span className="text-[11px] text-muted block">Visible in warehouse picking manifests, batch sorting, and SKU training</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <ModalActions
+            close={close}
+            primary={product ? 'Update Warehouse Product' : 'Create Product'}
+            loading={loading}
           />
-        </label>
-
-        <label className="check mt-4">
-          <input
-            type="checkbox"
-            checked={active}
-            onChange={(e) => setActive(e.target.checked)}
-          />
-          Active Product (Visible for picking)
-        </label>
-
-        <ModalActions
-          close={close}
-          primary={product ? 'Update Product' : 'Create Product'}
-          loading={loading}
-        />
-      </form>
-    </Modal>
+        </form>
+      </div>
+    </div>
   )
 }
 
 function AddPatternRuleModal({ products, close, onAdded }: any) {
-  const [ruleType, setRuleType] = useState('contains')
+  const [ruleType, setRuleType] = useState<'starts_with' | 'contains' | 'ends_with' | 'regex'>('contains')
   const [value, setValue] = useState('')
   const [productId, setProductId] = useState<number | ''>('')
   const [worker, setWorker] = useState('')
   const [priority, setPriority] = useState(10)
+  const [testInput, setTestInput] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Live test result
+  const isMatch = (() => {
+    if (!testInput.trim() || !value.trim()) return false
+    const raw = testInput.trim().toUpperCase()
+    const pattern = value.trim().toUpperCase()
+    if (ruleType === 'starts_with') return raw.startsWith(pattern)
+    if (ruleType === 'ends_with') return raw.endsWith(pattern)
+    if (ruleType === 'contains') return raw.includes(pattern)
+    if (ruleType === 'regex') {
+      try { return new RegExp(value.trim(), 'i').test(raw) } catch { return false }
+    }
+    return false
+  })()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -5265,7 +6619,7 @@ function AddPatternRuleModal({ products, close, onAdded }: any) {
     setLoading(true)
     try {
       await createPatternRule({
-        rule_type: ruleType as any,
+        rule_type: ruleType,
         value: value.trim(),
         product_id: productId ? Number(productId) : null,
         suggested_worker: worker || null,
@@ -5280,68 +6634,137 @@ function AddPatternRuleModal({ products, close, onAdded }: any) {
   }
 
   return (
-    <Modal title="Add Pattern SKU Rule" close={close}>
-      <form onSubmit={handleSubmit}>
-        <div className="form-grid">
-          <label>
-            Rule Match Type
-            <select value={ruleType} onChange={(e) => setRuleType(e.target.value)}>
-              <option value="starts_with">Starts With</option>
-              <option value="contains">Contains</option>
-              <option value="ends_with">Ends With</option>
-              <option value="regex">Regex</option>
-            </select>
-          </label>
-          <label>
-            Match Value
-            <input
-              placeholder="e.g. GB- or R16S"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              required
-            />
-          </label>
+    <div className="modal-backdrop">
+      <div className="modal max-w-xl w-full">
+        <div className="modal-head pb-3 border-b border-border">
+          <div>
+            <p className="eyebrow text-blue-500 font-semibold flex items-center gap-1.5 text-xs">
+              <GitBranch size={14} /> Pattern Matching Engine
+            </p>
+            <h2 className="text-lg font-bold text-foreground mt-0.5">Add Pattern Classification Rule</h2>
+          </div>
+          <button className="icon-button" onClick={close} title="Close (Esc)">
+            <X size={18} />
+          </button>
         </div>
 
-        <label>
-          Target Canonical Product (Optional)
-          <select
-            value={productId}
-            onChange={(e) => setProductId(e.target.value ? Number(e.target.value) : '')}
-          >
-            <option value="">None (Worker suggestion only)</option>
-            {products.map((p: any) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </label>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          {/* Rule Type Visual Cards */}
+          <div className="form-section space-y-2.5">
+            <h3 className="form-section-title text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
+              <Layers size={13} className="text-blue-500" /> Rule Match Strategy
+            </h3>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { id: 'contains', label: 'Contains', desc: 'Substring match' },
+                { id: 'starts_with', label: 'Starts With', desc: 'Prefix match' },
+                { id: 'ends_with', label: 'Ends With', desc: 'Suffix match' },
+                { id: 'regex', label: 'Regex', desc: 'Expression' },
+              ].map((t) => (
+                <div
+                  key={t.id}
+                  onClick={() => setRuleType(t.id as any)}
+                  className={`card-radio p-2.5 cursor-pointer text-left ${
+                    ruleType === t.id ? 'active' : ''
+                  }`}
+                >
+                  <p className="text-xs font-bold text-foreground">{t.label}</p>
+                  <span className="text-[10px] text-muted block mt-0.5">{t.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
 
-        <div className="form-grid">
-          <label>
-            Suggested Worker
-            <select value={worker} onChange={(e) => setWorker(e.target.value)}>
-              <option value="">Default from product</option>
-              <option value="Sohel">Sohel</option>
-              <option value="Kartik Da">Kartik Da</option>
-            </select>
-          </label>
-          <label>
-            Priority
-            <input
-              type="number"
-              value={priority}
-              onChange={(e) => setPriority(Number(e.target.value))}
-            />
-          </label>
-        </div>
+          <div className="form-section space-y-3.5">
+            <div className="form-group">
+              <label className="text-xs font-semibold text-foreground">
+                Pattern Match Value *
+              </label>
+              <input
+                className="w-full px-3.5 py-2 text-xs font-mono rounded-lg border border-border bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                placeholder={ruleType === 'starts_with' ? 'e.g. GB- or R1S-' : ruleType === 'contains' ? 'e.g. 17X19 or TRIPOD' : 'e.g. -BLK'}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                required
+              />
+            </div>
 
-        <ModalActions
-          close={close}
-          primary="Create Rule"
-          loading={loading}
-        />
-      </form>
-    </Modal>
+            {/* Interactive Rule Sandbox inside modal */}
+            <div className="p-3.5 rounded-xl bg-card border border-border space-y-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
+                Live Test Sandbox
+              </span>
+              <input
+                className="w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-border bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                placeholder="Type test SKU (e.g. GB-17X19-BLK)..."
+                value={testInput}
+                onChange={(e) => setTestInput(e.target.value)}
+              />
+              {testInput && (
+                <div className="flex items-center gap-2 text-xs pt-1">
+                  {isMatch ? (
+                    <span className="badge badge-success font-bold">✓ Rule Matches this SKU!</span>
+                  ) : (
+                    <span className="badge badge-danger">✗ Does not match</span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="form-section space-y-3.5">
+            <div className="form-group">
+              <label className="text-xs font-semibold text-foreground">
+                Target Canonical Product (Optional)
+              </label>
+              <select
+                className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                value={productId}
+                onChange={(e) => setProductId(e.target.value ? Number(e.target.value) : '')}
+              >
+                <option value="">None (Worker Routing Only)</option>
+                {products.map((p: any) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} [{p.internal_code || '—'}] ({p.assigned_worker})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="form-group">
+                <label className="text-xs font-semibold text-foreground">Suggested Floor Worker</label>
+                <select
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  value={worker}
+                  onChange={(e) => setWorker(e.target.value)}
+                >
+                  <option value="">Default from product</option>
+                  <option value="Sohel">Sohel</option>
+                  <option value="Kartik Da">Kartik Da</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="text-xs font-semibold text-foreground">Rule Execution Priority</label>
+                <input
+                  className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-border bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  type="number"
+                  value={priority}
+                  onChange={(e) => setPriority(Number(e.target.value))}
+                />
+              </div>
+            </div>
+          </div>
+
+          <ModalActions
+            close={close}
+            primary="Save Pattern Rule"
+            loading={loading}
+          />
+        </form>
+      </div>
+    </div>
   )
 }
 
