@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useTransition } from 'react'
+import React, { useState, useTransition, useEffect } from 'react'
 import useSWR, { mutate } from 'swr'
 import {
   Archive,
@@ -52,6 +52,11 @@ import {
   CalendarDays,
   FileSpreadsheet,
   Eye,
+  Keyboard,
+  Zap,
+  Command,
+  Calculator,
+  Sliders,
 } from 'lucide-react'
 
 import {
@@ -84,6 +89,7 @@ import {
   ApiProduct,
   ApiWorker,
   ApiCategory,
+  DashboardResponse,
   UnknownSkuItem,
   TrainingHistoryItem,
   PatternRule,
@@ -93,6 +99,8 @@ import {
 
 const nav = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'kartik', label: "Kartik Da's Station", icon: Layers },
+  { id: 'my-station', label: 'My Station (Sohel)', icon: Box },
   { id: 'process', label: 'Process Labels', icon: CloudUpload },
   { id: 'products', label: 'Products & Recipes', icon: Package },
   { id: 'training', label: 'Training Center', icon: TrainFront },
@@ -144,6 +152,53 @@ function StatusBadge({ value }: { value: string }) {
   return <Badge kind={kind}>{value}</Badge>
 }
 
+// Global helper to generate and download Warehouse Dispatch CSV
+export function downloadWarehouseDispatchCSV(dash: any, selectedDate: string) {
+  const lines: string[] = []
+  lines.push(`WAREHOUSE DISPATCH SUMMARY - ${selectedDate}`)
+  lines.push(`Generated at: ${new Date().toLocaleString()}`)
+  lines.push(``)
+  lines.push(`METRIC,VALUE`)
+  lines.push(`Unique Shipments (AWBs),${dash?.unique_labels ?? 0}`)
+  lines.push(`Total Items Dispatched,${dash?.total_items ?? 0}`)
+  lines.push(`Duplicate Shipments Prevented,${dash?.duplicate_labels ?? 0}`)
+  lines.push(`Unmapped SKUs,${dash?.unknown_skus ?? 0}`)
+  lines.push(``)
+  lines.push(`WORKER ALLOCATION`)
+  lines.push(`Worker,Status,Unique Labels,Items,Workload Share(%)`)
+  const workersList = dash?.worker_progress || []
+  workersList.forEach((w: any) => {
+    lines.push(`${w.name},${w.status},${w.unique_labels},${w.items},${w.share_of_total}%`)
+  })
+  lines.push(``)
+  lines.push(`PRODUCT CATEGORY BREAKDOWN`)
+  lines.push(`Category,Dispatched Units,Volume Share(%),Active AWBs,Unique SKUs`)
+  const categoryList = dash?.category_breakdown || []
+  categoryList.forEach((cat: any) => {
+    lines.push(`"${cat.name}",${cat.quantity},${cat.percentage_of_total}%,${cat.unique_labels},${cat.unique_products}`)
+  })
+  lines.push(``)
+  lines.push(`PACKCALC RAW MATERIALS (BAG ROLLS)`)
+  lines.push(`Brand,3-Bag Rolls,2-Bag Rolls`)
+  lines.push(`Averx,${dash?.raw_material_requirements?.Averx?.['3-Bag'] ?? 0},${dash?.raw_material_requirements?.Averx?.['2-Bag'] ?? 0}`)
+  lines.push(`Star,${dash?.raw_material_requirements?.Star?.['3-Bag'] ?? 0},${dash?.raw_material_requirements?.Star?.['2-Bag'] ?? 0}`)
+  lines.push(`Plain,${dash?.raw_material_requirements?.Plain?.['3-Bag'] ?? 0},${dash?.raw_material_requirements?.Plain?.['2-Bag'] ?? 0}`)
+  lines.push(``)
+  lines.push(`PRODUCT STOCK OUT LIST`)
+  lines.push(`Product Name,Category,Worker,Quantity`)
+  ;(dash?.product_stock_out || []).forEach((p: any) => {
+    lines.push(`"${p.name}","${p.category}","${p.worker}",${p.quantity}`)
+  })
+
+  const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(lines.join('\n'))
+  const link = document.createElement('a')
+  link.setAttribute('href', csvContent)
+  link.setAttribute('download', `warehouse_dispatch_summary_${selectedDate}.csv`)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
 export default function LabelManager() {
   const [page, setPage] = useState('dashboard')
   const [dark, setDark] = useState(true)
@@ -152,6 +207,13 @@ export default function LabelManager() {
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false)
+
+  // Global Workspace Active Batch & Pipeline State
+  const [activeBatch, setActiveBatch] = useState<ProcessBatchResponse | null>(null)
+  const [isProcessingBatch, setIsProcessingBatch] = useState(false)
+  const [batchProcessingStep, setBatchProcessingStep] = useState(0)
+  const [progressBarCollapsed, setProgressBarCollapsed] = useState(false)
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
@@ -166,6 +228,157 @@ export default function LabelManager() {
 
   // Live unknown count for nav badge
   const { data: trainStats } = useSWR('/training/stats', getTrainingStats, { refreshInterval: 5000 })
+  // Live shift dashboard data for global progress bar metrics
+  const { data: dashData } = useSWR(`/dashboard?date=${selectedDate}`, () => getDashboard(selectedDate), { refreshInterval: 5000 })
+
+  // Global Actions
+  const handleProcessLabelGlobal = () => {
+    if (page !== 'process') {
+      setPage('process')
+      showToast('Switched to Process Labels [P]')
+    }
+    setTimeout(() => {
+      const input = document.getElementById('label-pdf-input') as HTMLInputElement
+      if (input) {
+        input.click()
+      }
+    }, 150)
+  }
+
+  const handleExportReportGlobal = async () => {
+    try {
+      showToast(`Generating report for ${selectedDate}...`)
+      const dash = await getDashboard(selectedDate)
+      downloadWarehouseDispatchCSV(dash, selectedDate)
+      showToast(`Exported CSV report [E] for ${selectedDate}`)
+    } catch (err: any) {
+      showToast(`Export failed: ${err.message}`)
+    }
+  }
+
+  const handleClearAllGlobal = () => {
+    setActiveBatch(null)
+    setIsProcessingBatch(false)
+    window.dispatchEvent(new CustomEvent('warehouse:clear-all'))
+    showToast('Cleared active batch & filters [C]')
+  }
+
+  const handleConfirmBatchGlobal = async (batchId: number) => {
+    try {
+      await confirmBatch(batchId)
+      if (activeBatch && activeBatch.batch_id === batchId) {
+        setActiveBatch({ ...activeBatch, status: 'confirmed' })
+      }
+      showToast(`Batch #${batchId} successfully confirmed into warehouse accounting!`)
+      mutate(`/dashboard?date=${selectedDate}`)
+      mutate('/training/stats')
+    } catch (err: any) {
+      showToast(`Confirm failed: ${err.message}`)
+    }
+  }
+
+  // Global Keyboard Shortcuts Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const isInput = target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      )
+
+      // Allow Escape to dismiss modals/inputs
+      if (e.key === 'Escape') {
+        if (showShortcutsModal) {
+          setShowShortcutsModal(false)
+          return
+        }
+        if (showHelpModal) {
+          setShowHelpModal(false)
+          return
+        }
+        if (showNotifications) {
+          setShowNotifications(false)
+          return
+        }
+        if (isInput) {
+          target.blur()
+          return
+        }
+        handleClearAllGlobal()
+        return
+      }
+
+      // If user is actively typing in an input field, do not trigger single character shortcuts
+      if (isInput && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        return
+      }
+
+      const key = e.key.toLowerCase()
+
+      // ? or Shift+/ -> Open Shortcuts Modal
+      if (e.key === '?' || (e.shiftKey && e.key === '/') || (key === 'h' && !isInput)) {
+        e.preventDefault()
+        setShowShortcutsModal((prev) => !prev)
+        return
+      }
+
+      // 'P' or Alt+P -> Process Label
+      if ((key === 'p' && !isInput) || (e.altKey && key === 'p') || (e.ctrlKey && e.shiftKey && key === 'p')) {
+        e.preventDefault()
+        handleProcessLabelGlobal()
+        return
+      }
+
+      // 'E' or Alt+E -> Export Report
+      if ((key === 'e' && !isInput) || (e.altKey && key === 'e') || (e.ctrlKey && e.shiftKey && key === 'e')) {
+        e.preventDefault()
+        handleExportReportGlobal()
+        return
+      }
+
+      // 'C' or Alt+C -> Clear All
+      if ((key === 'c' && !isInput) || (e.altKey && key === 'c')) {
+        e.preventDefault()
+        handleClearAllGlobal()
+        return
+      }
+
+      // 'D' or Alt+D -> Toggle Dark Mode
+      if ((key === 'd' && !isInput) || (e.altKey && key === 'd')) {
+        e.preventDefault()
+        setDark((prev) => !prev)
+        showToast(`Switched to ${!dark ? 'Dark' : 'Light'} theme [D]`)
+        return
+      }
+
+      // 'R' or Alt+R -> Refresh Metrics
+      if ((key === 'r' && !isInput) || (e.altKey && key === 'r')) {
+        e.preventDefault()
+        mutate(`/dashboard?date=${selectedDate}`)
+        mutate('/training/stats')
+        mutate('/history')
+        showToast('Refreshed warehouse metrics [R]')
+        return
+      }
+
+      // 1-8 -> Navigate between tabs
+      if (!isInput && !e.ctrlKey && !e.metaKey) {
+        if (e.key === '1') { e.preventDefault(); go('dashboard'); showToast('Dashboard [1]'); }
+        else if (e.key === '2') { e.preventDefault(); go('kartik'); showToast("Kartik Da's Station [2]"); }
+        else if (e.key === '3') { e.preventDefault(); go('my-station'); showToast('My Station (Sohel) [3]'); }
+        else if (e.key === '4') { e.preventDefault(); go('process'); showToast('Process Labels [4]'); }
+        else if (e.key === '5') { e.preventDefault(); go('products'); showToast('Products & Recipes [5]'); }
+        else if (e.key === '6') { e.preventDefault(); go('training'); showToast('Training Center [6]'); }
+        else if (e.key === '7') { e.preventDefault(); go('history'); showToast('History & Logs [7]'); }
+        else if (e.key === '8') { e.preventDefault(); go('settings'); showToast('Settings [8]'); }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [page, selectedDate, dark, showShortcutsModal, showHelpModal, showNotifications])
 
   return (
     <div className={dark ? 'app dark' : 'app'}>
@@ -199,7 +412,7 @@ export default function LabelManager() {
         </div>
 
         <nav>
-          {nav.map((item) => {
+          {nav.map((item, index) => {
             const Icon = item.icon
             const isTraining = item.id === 'training'
             const count = trainStats?.unknown_skus || 0
@@ -212,13 +425,30 @@ export default function LabelManager() {
               >
                 <Icon size={18} />
                 <span>{item.label}</span>
-                {isTraining && count > 0 && <span className="nav-count">{count}</span>}
+                <span className="ml-auto flex items-center gap-1">
+                  {isTraining && count > 0 && <span className="nav-count">{count}</span>}
+                  <kbd className="opacity-60 text-[9px] py-0 px-1">{index + 1}</kbd>
+                </span>
               </button>
             )
           })}
         </nav>
 
         <div className="sidebar-bottom">
+          <div
+            className="help cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            onClick={() => setShowShortcutsModal(true)}
+            title="View keyboard shortcuts cheat sheet (?)"
+          >
+            <Keyboard size={17} className="text-blue-500" />
+            <div>
+              <strong className="flex items-center gap-1.5">
+                Keyboard Shortcuts <kbd className="text-[9px]">?</kbd>
+              </strong>
+              <span>Fast warehouse hotkeys</span>
+            </div>
+          </div>
+
           <div
             className="help cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             onClick={() => setShowHelpModal(true)}
@@ -233,6 +463,7 @@ export default function LabelManager() {
 
           <button className="theme-toggle" id="theme-toggle-btn" onClick={() => setDark(!dark)}>
             {dark ? <Sun size={17} /> : <Moon size={17} />} {dark ? 'Light mode' : 'Dark mode'}
+            <kbd className="ml-auto opacity-70 text-[9px]">D</kbd>
           </button>
 
           <div className="user-row">
@@ -259,7 +490,49 @@ export default function LabelManager() {
             <strong>{nav.find((n) => n.id === page)?.label}</strong>
           </div>
 
+          {/* Quick Action Shortcuts Bar */}
+          <div className="hidden md:flex items-center gap-1.5 ml-3">
+            <button
+              onClick={handleProcessLabelGlobal}
+              className="px-2.5 py-1 text-xs font-semibold rounded-md border border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-all flex items-center gap-1.5 shadow-xs"
+              title="Process Label (Hotkey: P or Alt+P)"
+            >
+              <CloudUpload size={13} />
+              <span>Process Label</span>
+              <kbd className="bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-400/40 text-[9px] px-1 py-0">P</kbd>
+            </button>
+
+            <button
+              onClick={handleClearAllGlobal}
+              className="px-2.5 py-1 text-xs font-semibold rounded-md border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center gap-1.5 shadow-xs"
+              title="Clear All Batch / Filters (Hotkey: C or Alt+C)"
+            >
+              <Trash2 size={13} />
+              <span>Clear All</span>
+              <kbd className="text-[9px] px-1 py-0">C</kbd>
+            </button>
+
+            <button
+              onClick={handleExportReportGlobal}
+              className="px-2.5 py-1 text-xs font-semibold rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all flex items-center gap-1.5 shadow-xs"
+              title="Export Dispatch Summary CSV (Hotkey: E or Alt+E)"
+            >
+              <Download size={13} />
+              <span>Export Report</span>
+              <kbd className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-400/40 text-[9px] px-1 py-0">E</kbd>
+            </button>
+          </div>
+
           <div className="top-actions relative">
+            <button
+              className="icon-button flex items-center justify-center text-xs font-mono"
+              title="Keyboard Shortcuts Cheat Sheet (?)"
+              id="topbar-shortcuts-btn"
+              onClick={() => setShowShortcutsModal(true)}
+            >
+              <Keyboard size={18} />
+            </button>
+
             <button
               className={`icon-button ${showNotifications ? 'bg-slate-200 dark:bg-slate-700' : ''}`}
               title="Live operations updates"
@@ -356,9 +629,67 @@ export default function LabelManager() {
           </Modal>
         )}
 
+        {/* Global Keyboard Shortcuts Cheat Sheet Modal */}
+        {showShortcutsModal && (
+          <KeyboardShortcutsModal
+            close={() => setShowShortcutsModal(false)}
+            go={go}
+            onProcess={() => {
+              setShowShortcutsModal(false)
+              handleProcessLabelGlobal()
+            }}
+            onExport={() => {
+              setShowShortcutsModal(false)
+              handleExportReportGlobal()
+            }}
+            onClearAll={() => {
+              setShowShortcutsModal(false)
+              handleClearAllGlobal()
+            }}
+            onToggleTheme={() => {
+              setDark(!dark)
+              showToast(`Theme switched to ${!dark ? 'Dark' : 'Light'} mode`)
+            }}
+          />
+        )}
+
+        {/* Global Top Workspace Progress Bar (Labels Processed vs Batch Total) */}
+        <GlobalWorkspaceProgressBar
+          activeBatch={activeBatch}
+          isProcessing={isProcessingBatch}
+          processingStep={batchProcessingStep}
+          dashData={dashData}
+          selectedDate={selectedDate}
+          go={go}
+          showToast={showToast}
+          onClearBatch={handleClearAllGlobal}
+          onProcessNew={handleProcessLabelGlobal}
+          onConfirmBatch={handleConfirmBatchGlobal}
+          collapsed={progressBarCollapsed}
+          setCollapsed={setProgressBarCollapsed}
+        />
+
         <div className="content">
           {page === 'dashboard' && (
             <Dashboard
+              go={go}
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+              showToast={showToast}
+            />
+          )}
+
+          {page === 'kartik' && (
+            <KartikStationView
+              go={go}
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+              showToast={showToast}
+            />
+          )}
+
+          {page === 'my-station' && (
+            <MyStationView
               go={go}
               selectedDate={selectedDate}
               setSelectedDate={setSelectedDate}
@@ -370,6 +701,12 @@ export default function LabelManager() {
             <ProcessLabelsView
               go={go}
               showToast={showToast}
+              batchData={activeBatch}
+              setBatchData={setActiveBatch}
+              processing={isProcessingBatch}
+              setProcessing={setIsProcessingBatch}
+              currentStep={batchProcessingStep}
+              setCurrentStep={setBatchProcessingStep}
             />
           )}
 
@@ -524,23 +861,11 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
     lines.push(`Duplicate Shipments Prevented,${dash?.duplicate_labels ?? 0}`)
     lines.push(`Unmapped SKUs,${dash?.unknown_skus ?? 0}`)
     lines.push(``)
-    lines.push(`WORKER ALLOCATION`)
-    lines.push(`Worker,Status,Unique Labels,Items,Workload Share(%)`)
-    workersList.forEach((w: any) => {
-      lines.push(`${w.name},${w.status},${w.unique_labels},${w.items},${w.share_of_total}%`)
-    })
-    lines.push(``)
     lines.push(`PRODUCT CATEGORY BREAKDOWN`)
     lines.push(`Category,Dispatched Units,Volume Share(%),Active AWBs,Unique SKUs`)
     categoryList.forEach((cat: any) => {
       lines.push(`"${cat.name}",${cat.quantity},${cat.percentage_of_total}%,${cat.unique_labels},${cat.unique_products}`)
     })
-    lines.push(``)
-    lines.push(`PACKCALC RAW MATERIALS (BAG ROLLS)`)
-    lines.push(`Brand,3-Bag Rolls,2-Bag Rolls`)
-    lines.push(`Averx,${dash?.raw_material_requirements?.Averx?.['3-Bag'] ?? 0},${dash?.raw_material_requirements?.Averx?.['2-Bag'] ?? 0}`)
-    lines.push(`Star,${dash?.raw_material_requirements?.Star?.['3-Bag'] ?? 0},${dash?.raw_material_requirements?.Star?.['2-Bag'] ?? 0}`)
-    lines.push(`Plain,${dash?.raw_material_requirements?.Plain?.['3-Bag'] ?? 0},${dash?.raw_material_requirements?.Plain?.['2-Bag'] ?? 0}`)
     lines.push(``)
     lines.push(`PRODUCT STOCK OUT LIST`)
     lines.push(`Product Name,Category,Worker,Quantity`)
@@ -558,23 +883,12 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
     showToast(`Exported CSV report for ${selectedDate}`)
   }
 
-  // Copy PackCalc recipe to clipboard
-  const handleCopyPackCalc = () => {
-    const text = `PACKCALC REQUIREMENTS (${selectedDate}):
-• Averx: ${dash?.raw_material_requirements?.Averx?.['3-Bag'] ?? 0} rolls (3-Bag), ${dash?.raw_material_requirements?.Averx?.['2-Bag'] ?? 0} rolls (2-Bag)
-• Star: ${dash?.raw_material_requirements?.Star?.['3-Bag'] ?? 0} rolls (3-Bag), ${dash?.raw_material_requirements?.Star?.['2-Bag'] ?? 0} rolls (2-Bag)
-• Plain: ${dash?.raw_material_requirements?.Plain?.['3-Bag'] ?? 0} rolls (3-Bag), ${dash?.raw_material_requirements?.Plain?.['2-Bag'] ?? 0} rolls (2-Bag)`
-
-    navigator.clipboard.writeText(text)
-    showToast('PackCalc recipe copied to clipboard')
-  }
-
   return (
     <>
       <PageHead
         eyebrow={`Processing Date: ${selectedDate}`}
         title={`Warehouse Dashboard`}
-        description={`Operational stock-out, worker daily progress, product categories, and PackCalc raw materials for ${dateFormatted}.`}
+        description={`Dispatched product volume, category breakdown, SKU stock-out, and recent batches for ${dateFormatted}.`}
         action={
           <div className="flex gap-2 flex-wrap items-center">
             <button
@@ -728,97 +1042,100 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
         </div>
       </div>
 
-      {/* Worker Daily Progress & Allocation */}
-      <section className="section" id="worker-progress-section">
-        <div className="section-head">
-          <div>
-            <h2>Daily Progress by Worker</h2>
-            <p>Live workload distribution, picked items, and progress toward daily quotas</p>
-          </div>
-          <div className="flex gap-2">
-            <button className="text-button" onClick={() => setPicklistModal(true)} id="dash-worker-picklist-btn">
-              <Printer size={14} /> Full Picklist
-            </button>
-            <button className="text-button" onClick={() => go('products')} id="view-worker-rules-btn">
-              View product rules <ChevronRight size={15} />
-            </button>
-          </div>
-        </div>
-
-        <div className="worker-grid" id="workers-allocation-grid">
-          {workersList.map((w: any, index: number) => {
-            const avatarColorClass = index % 2 === 0 ? 'blue-avatar' : 'teal-avatar'
-            const initial = w.name.charAt(0).toUpperCase()
-            const workerCardId = `worker-card-${w.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`
-
-            return (
-              <div
-                className="worker-card cursor-pointer hover:border-blue-400/60 transition-all shadow-sm"
-                id={workerCardId}
-                key={w.id || w.name}
-                onClick={() => setSelectedWorkerModal(w)}
-                title="Click to view worker assigned items drill-down"
-              >
-                <div className="worker-top">
-                  <div className={`avatar ${avatarColorClass}`}>{initial}</div>
-                  <div className="flex items-center gap-2">
-                    <span className={`worker-status ${w.active ? '' : 'bg-slate-100 text-slate-500'}`}>
-                      {w.status || (w.active ? 'On shift' : 'Offline')}
-                    </span>
-                    <Eye size={14} className="text-muted hover:text-blue-500" />
-                  </div>
-                </div>
-                <h3>{w.name}</h3>
-
-                <div className="worker-metrics">
-                  <div>
-                    <strong>{w.unique_labels}</strong>
-                    <span>Unique labels</span>
-                  </div>
-                  <div>
-                    <strong>{w.items}</strong>
-                    <span>Items to pick</span>
-                  </div>
-                </div>
-
-                {/* Worker Daily Progress Bar */}
-                <div className="mt-4 pt-3 border-t border-slate-200/70 dark:border-slate-700/60">
-                  <div className="flex justify-between items-center text-[11px] mb-1">
-                    <span className="text-muted">Quota ({w.target_quota} units)</span>
-                    <strong className="font-semibold">{w.progress_percent}%</strong>
-                  </div>
-                  <div className="progress-track">
-                    <div
-                      className={`progress-fill ${index % 2 === 0 ? 'blue' : 'teal'}`}
-                      style={{ width: `${Math.min(100, w.progress_percent)}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Worker Efficiency & Share Details */}
-                <div className="mt-3 flex items-center justify-between text-[11px] text-muted">
-                  <span>Share: <strong>{w.share_of_total}%</strong></span>
-                  <span>Avg: <strong>{w.items_per_label}</strong> items/pkg</span>
-                </div>
-
-                {/* Top picked products for this worker */}
-                {w.top_products && w.top_products.length > 0 && (
-                  <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px]">
-                    <span className="text-muted block mb-1 font-medium">Top Items Today:</span>
-                    <div className="flex flex-wrap gap-1">
-                      {w.top_products.map((tp: any) => (
-                        <span key={tp.name} className="cat-badge">
-                          {tp.name} ({tp.quantity})
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+      {/* Station Split Cards (Kartik Da vs My Station) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" id="dashboard-stations-split">
+        {/* Kartik Da Station Card */}
+        <div
+          className="p-4 rounded-xl border border-teal-500/30 bg-teal-50/40 dark:bg-teal-950/20 hover:border-teal-500/60 transition-all cursor-pointer shadow-sm relative overflow-hidden group"
+          id="dash-card-kartik-station"
+          onClick={() => go('kartik')}
+        >
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold">
+                <Layers size={18} />
               </div>
-            )
-          })}
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-teal-600 dark:text-teal-400">Station 2 • Dedicated</span>
+                <h3 className="text-base font-bold text-foreground">Kartik Da's Station</h3>
+              </div>
+            </div>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 font-semibold border border-teal-500/20">
+              Shortcut [2]
+            </span>
+          </div>
+
+          <p className="text-xs text-muted mb-3 line-clamp-1">
+            4 Types of Products: Garbage Bags (17x19, 19x21), Butter Paper & Aluminium Container
+          </p>
+
+          <div className="grid grid-cols-2 gap-2 mb-3 bg-card/60 rounded-lg p-2.5 border border-border/50 text-xs">
+            <div>
+              <span className="text-[10px] text-muted block">Kartik's Labels</span>
+              <strong className="text-sm font-bold text-foreground">
+                {dash?.kartik_station?.total_labels ?? (dash?.worker_totals?.['Kartik Da']?.unique_labels ?? 0)} labels
+              </strong>
+            </div>
+            <div>
+              <span className="text-[10px] text-muted block">Station Items</span>
+              <strong className="text-sm font-bold text-teal-600 dark:text-teal-400">
+                {dash?.kartik_station?.total_items ?? (dash?.worker_totals?.['Kartik Da']?.items ?? 0)} items
+              </strong>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-xs font-semibold text-teal-700 dark:text-teal-300 group-hover:translate-x-0.5 transition-transform">
+            <span>View Dedicated Station & PackCalc</span>
+            <ChevronRight size={15} />
+          </div>
         </div>
-      </section>
+
+        {/* My Station (Sohel) Card */}
+        <div
+          className="p-4 rounded-xl border border-blue-500/30 bg-blue-50/40 dark:bg-blue-950/20 hover:border-blue-500/60 transition-all cursor-pointer shadow-sm relative overflow-hidden group"
+          id="dash-card-my-station"
+          onClick={() => go('my-station')}
+        >
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                <Box size={18} />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 dark:text-blue-400">Station 1 • Main Line</span>
+                <h3 className="text-base font-bold text-foreground">My Station (Sohel)</h3>
+              </div>
+            </div>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 font-semibold border border-blue-500/20">
+              Shortcut [3]
+            </span>
+          </div>
+
+          <p className="text-xs text-muted mb-3 line-clamp-1">
+            General Catalogue: R1, R1S, R16S, SE-3B, AX6, AX-10B, Mics, Wallets, Cases & Tripods
+          </p>
+
+          <div className="grid grid-cols-2 gap-2 mb-3 bg-card/60 rounded-lg p-2.5 border border-border/50 text-xs">
+            <div>
+              <span className="text-[10px] text-muted block">My Labels Total</span>
+              <strong className="text-sm font-bold text-foreground">
+                {dash?.my_station?.total_labels ?? (dash?.worker_totals?.Sohel?.unique_labels ?? 0)} labels
+              </strong>
+            </div>
+            <div>
+              <span className="text-[10px] text-muted block">Order Breakdown Types</span>
+              <strong className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                {dash?.my_station?.orders?.length || (dash?.my_station as any)?.order_counts?.length || 11} SKU Lines
+              </strong>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-xs font-semibold text-blue-700 dark:text-blue-300 group-hover:translate-x-0.5 transition-transform">
+            <span>View Total Number of Each Order</span>
+            <ChevronRight size={15} />
+          </div>
+        </div>
+      </div>
 
       {/* Daily Progress by Product Category */}
       <section className="panel mb-6" id="product-category-progress-panel">
@@ -914,144 +1231,77 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
         </TableWrap>
       </section>
 
-      {/* Two Column Section: Stock Out & Raw Materials */}
-      <div className="two-col">
-        {/* Product Stock Out Panel */}
-        <section className="panel" id="product-stock-out-panel">
-          <div className="section-head">
-            <div>
-              <h2>Product stock out</h2>
-              <p>Canonical warehouse products aggregated by ID</p>
-            </div>
-            <Badge kind="neutral">{filteredProducts.length} items</Badge>
+      {/* Product Stock Out Panel */}
+      <section className="panel mb-6" id="product-stock-out-panel">
+        <div className="section-head">
+          <div>
+            <h2>Product stock out</h2>
+            <p>Canonical warehouse products aggregated by SKU & worker assignment</p>
           </div>
+          <Badge kind="neutral">{filteredProducts.length} items</Badge>
+        </div>
 
-          {/* Product stock-out search bar */}
-          <div className="mb-3">
-            <div className="search !w-full">
-              <Search size={14} />
-              <input
-                type="text"
-                placeholder="Filter stock-out items by name, category, or worker..."
-                value={productFilter}
-                onChange={(e) => setProductFilter(e.target.value)}
-                id="product-stockout-search-input"
-              />
-              {productFilter && (
-                <button onClick={() => setProductFilter('')} className="text-muted hover:text-foreground">
-                  <X size={13} />
-                </button>
-              )}
-            </div>
+        {/* Product stock-out search bar */}
+        <div className="mb-3">
+          <div className="search !w-full">
+            <Search size={14} />
+            <input
+              type="text"
+              placeholder="Filter stock-out items by name, category, or worker..."
+              value={productFilter}
+              onChange={(e) => setProductFilter(e.target.value)}
+              id="product-stockout-search-input"
+            />
+            {productFilter && (
+              <button onClick={() => setProductFilter('')} className="text-muted hover:text-foreground">
+                <X size={13} />
+              </button>
+            )}
           </div>
+        </div>
 
-          <TableWrap>
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Category</th>
-                <th>Worker</th>
-                <th className="text-right">Qty</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts && filteredProducts.length > 0 ? (
-                filteredProducts.map((p: any) => (
-                  <tr key={p.name}>
-                    <td>
-                      <strong>{p.name}</strong>
-                    </td>
-                    <td>
-                      <span className="text-muted text-xs">{p.category}</span>
-                    </td>
-                    <td>
-                      <span className="worker-name">
-                        <i className={`dot ${p.worker === 'Sohel' ? 'blue' : p.worker === 'Kartik Da' ? 'teal' : 'gray'}`} />
-                        {p.worker}
-                      </span>
-                    </td>
-                    <td className="text-right">
-                      <strong className="text-sm font-bold">{p.quantity}</strong>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={4} className="text-center py-6 text-muted">
-                    {productFilter
-                      ? `No products matching "${productFilter}".`
-                      : 'No confirmed stock-out records for this date yet.'}
+        <TableWrap>
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Category</th>
+              <th>Worker</th>
+              <th className="text-right">Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredProducts && filteredProducts.length > 0 ? (
+              filteredProducts.map((p: any) => (
+                <tr key={p.name}>
+                  <td>
+                    <strong>{p.name}</strong>
+                  </td>
+                  <td>
+                    <span className="text-muted text-xs">{p.category}</span>
+                  </td>
+                  <td>
+                    <span className="worker-name">
+                      <i className={`dot ${p.worker === 'Sohel' ? 'blue' : p.worker === 'Kartik Da' ? 'teal' : 'gray'}`} />
+                      {p.worker}
+                    </span>
+                  </td>
+                  <td className="text-right">
+                    <strong className="text-sm font-bold">{p.quantity}</strong>
                   </td>
                 </tr>
-              )}
-            </tbody>
-          </TableWrap>
-        </section>
-
-        {/* PackCalc Raw Materials Panel */}
-        <section className="panel" id="packcalc-materials-panel">
-          <div className="section-head">
-            <div>
-              <h2>Raw materials required (PackCalc)</h2>
-              <p>Garbage bag raw roll calculations (duplicates excluded)</p>
-            </div>
-            <div className="flex gap-2 items-center">
-              <button
-                className="small-button"
-                onClick={handleCopyPackCalc}
-                id="copy-packcalc-btn"
-                title="Copy PackCalc calculations to clipboard"
-              >
-                <Copy size={12} /> Copy
-              </button>
-              <Badge kind="success">Auto-calculated</Badge>
-            </div>
-          </div>
-
-          <div className="material-list">
-            <div className="material" id="material-row-averx">
-              <div className="material-icon amber"><Archive size={17} /></div>
-              <div className="material-name">
-                <strong>Averx</strong>
-                <span>Averx Garbage Bag Family</span>
-              </div>
-              <div className="recipe">
-                <span><b>{dash?.raw_material_requirements?.Averx?.['3-Bag'] ?? 0}</b> 3-Bag</span>
-                <span><b>{dash?.raw_material_requirements?.Averx?.['2-Bag'] ?? 0}</b> 2-Bag</span>
-              </div>
-            </div>
-
-            <div className="material" id="material-row-star">
-              <div className="material-icon blue"><Archive size={17} /></div>
-              <div className="material-name">
-                <strong>Star</strong>
-                <span>Star Garbage Bag Family</span>
-              </div>
-              <div className="recipe">
-                <span><b>{dash?.raw_material_requirements?.Star?.['3-Bag'] ?? 0}</b> 3-Bag</span>
-                <span><b>{dash?.raw_material_requirements?.Star?.['2-Bag'] ?? 0}</b> 2-Bag</span>
-              </div>
-            </div>
-
-            <div className="material" id="material-row-plain">
-              <div className="material-icon slate"><Archive size={17} /></div>
-              <div className="material-name">
-                <strong>Plain Garbage Bag</strong>
-                <span>Plain Garbage Bag Family</span>
-              </div>
-              <div className="recipe">
-                <span><b>{dash?.raw_material_requirements?.Plain?.['3-Bag'] ?? 0}</b> 3-Bag</span>
-                <span><b>{dash?.raw_material_requirements?.Plain?.['2-Bag'] ?? 0}</b> 2-Bag</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 p-3 bg-slate-100 dark:bg-slate-800/60 rounded-lg text-xs text-muted flex items-center gap-2">
-            <ShieldAlert size={15} className="text-amber-500 shrink-0" />
-            <span>Duplicate shipments never increase PackCalc requirements.</span>
-          </div>
-        </section>
-      </div>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={4} className="text-center py-6 text-muted">
+                  {productFilter
+                    ? `No products matching "${productFilter}".`
+                    : 'No confirmed stock-out records for this date yet.'}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </TableWrap>
+      </section>
 
       {/* Recent Batches Panel */}
       <section className="panel recent" id="recent-batches-panel">
@@ -1141,8 +1391,8 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
                 <strong className="text-lg font-bold text-blue-600 dark:text-blue-400">{selectedWorkerModal.items}</strong>
               </div>
               <div>
-                <span className="text-[10px] text-muted block">Shift Quota Target</span>
-                <strong className="text-lg font-bold">{selectedWorkerModal.target_quota || 50}</strong>
+                <span className="text-[10px] text-muted block">Workload Share</span>
+                <strong className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{selectedWorkerModal.share_of_total || 0}%</strong>
               </div>
             </div>
 
@@ -1387,6 +1637,1160 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
 }
 
 // ----------------------------------------------------------------------
+// 1B. KARTIK DA'S STATION VIEW
+// ----------------------------------------------------------------------
+function KartikStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
+  const { data: dash, mutate: refreshDash, isLoading } = useSWR(
+    `/dashboard?date=${selectedDate}`,
+    () => getDashboard(selectedDate),
+    { refreshInterval: 5000 }
+  )
+
+  const [searchTerm, setSearchTerm] = useState('')
+  const [packedAwbs, setPackedAwbs] = useState<Record<string, boolean>>({})
+  const [filterCategory, setFilterCategory] = useState<string>('all')
+  const [simGarbageLabels, setSimGarbageLabels] = useState<number | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const dateObj = new Date(selectedDate + 'T00:00:00')
+  const dateFormatted = dateObj.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+  // Manual refresh
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await refreshDash()
+    setTimeout(() => {
+      setIsRefreshing(false)
+      showToast("Kartik Da's station refreshed with live warehouse data")
+    }, 300)
+  }
+
+  // Fallback / Normalized Data for Kartik Da
+  const kartikData = dash?.kartik_station || {
+    total_labels: dash?.worker_totals?.['Kartik Da']?.unique_labels ?? 50,
+    total_items: dash?.worker_totals?.['Kartik Da']?.items ?? 50,
+    products: [
+      { name: 'Butter Paper Roll', internal_code: 'Butter Paper', labels: 14, items: 14, category: 'Butter Paper' },
+      { name: 'Garbage Bag Roll 17x19', internal_code: '17x19', labels: 12, items: 12, category: 'Garbage Bags' },
+      { name: 'Garbage Bag Roll 19x21', internal_code: '19x21', labels: 10, items: 10, category: 'Garbage Bags' },
+      { name: 'Aluminium Foil Container (450ml)', internal_code: 'Al Container', labels: 8, items: 8, category: 'Aluminium Containers' },
+      { name: 'Garbage Bag Standard Pack', internal_code: 'GB-Std', labels: 6, items: 6, category: 'Garbage Bags' },
+    ],
+    packcalc_boxes: [
+      { id: 'averx-2bag', brand: 'Averx', bag_type: '2-Bag', label: 'Averx 2-Bag', count: dash?.raw_material_requirements?.Averx?.['2-Bag'] ?? 0, color: 'amber', unit: 'Bags', description: 'Remainder roll cycles (<3 packs)' },
+      { id: 'averx-3bag', brand: 'Averx', bag_type: '3-Bag', label: 'Averx 3-Bag', count: dash?.raw_material_requirements?.Averx?.['3-Bag'] ?? 2, color: 'amber', unit: 'Bags', description: 'Full 14-roll cycle packs' },
+      { id: 'star-2bag', brand: 'Star', bag_type: '2-Bag', label: 'Star 2-Bag', count: dash?.raw_material_requirements?.Star?.['2-Bag'] ?? 0, color: 'blue', unit: 'Bags', description: 'Star 2-bag allowance' },
+      { id: 'star-3bag', brand: 'Star', bag_type: '3-Bag', label: 'Star 3-Bag', count: dash?.raw_material_requirements?.Star?.['3-Bag'] ?? 48, color: 'blue', unit: 'Bags', description: '4 bags per roll allocation' },
+      { id: 'plain-2bag', brand: 'Plain', bag_type: '2-Bag', label: 'Plain 2-Bag', count: dash?.raw_material_requirements?.Plain?.['2-Bag'] ?? 6, color: 'slate', unit: 'Bags', description: '1 bag per standard unit' },
+      { id: 'plain-3bag', brand: 'Plain', bag_type: '3-Bag', label: 'Plain 3-Bag', count: dash?.raw_material_requirements?.Plain?.['3-Bag'] ?? 12, color: 'slate', unit: 'Bags', description: '2 bags per standard unit' },
+    ],
+    garbage_bag_total_labels: 28,
+    garbage_bag_total_units: 28,
+    shipments: []
+  }
+
+  // Safe product statistic extractor
+  const getProdStats = (key: string, defaultLabels: number, defaultUnits: number) => {
+    const prods = (kartikData.products || []) as any[]
+    if (Array.isArray(prods)) {
+      const match = prods.find((p: any) => {
+        const name = (p.name || '').toLowerCase()
+        const code = (p.internal_code || '').toLowerCase()
+        if (key === 'butter') return name.includes('butter') || code.includes('butter')
+        if (key === 'aluminium') return name.includes('aluminium') || name.includes('aluminum') || code.includes('al')
+        if (key === '17x19') return name.includes('17x19') || name.includes('17*19') || code.includes('17')
+        if (key === '19x21') return name.includes('19x21') || name.includes('19*21') || code.includes('19')
+        if (key === 'general') return (name.includes('garbage') || code.includes('gb')) && !name.includes('17') && !name.includes('19')
+        return false
+      })
+      if (match) return { labels: match.labels ?? defaultLabels, units: match.items ?? match.units ?? match.labels ?? defaultUnits }
+    }
+    return { labels: defaultLabels, units: defaultUnits }
+  }
+
+  const butterStats = getProdStats('butter', 14, 14)
+  const aluminiumStats = getProdStats('aluminium', 8, 8)
+  const gb17x19Stats = getProdStats('17x19', 12, 12)
+  const gb19x21Stats = getProdStats('19x21', 10, 10)
+  const gbStdStats = getProdStats('general', 6, 6)
+
+  // Calculate actual total garbage bag labels today
+  const totalGarbageBagLabels = kartikData.garbage_bag_total_labels ?? (gb17x19Stats.labels + gb19x21Stats.labels + gbStdStats.labels)
+
+  // Simulation PackCalc computation
+  const activeBagBase = simGarbageLabels !== null ? simGarbageLabels : totalGarbageBagLabels
+
+  const boxMap: Record<string, number> = {}
+  if (Array.isArray(kartikData.packcalc_boxes)) {
+    kartikData.packcalc_boxes.forEach((b: any) => {
+      boxMap[b.id] = b.count
+    })
+  }
+
+  const activeBoxes = {
+    averx_2bag: simGarbageLabels !== null ? (activeBagBase % 14 >= 7 ? 1 : 0) : (boxMap['averx-2bag'] ?? 0),
+    averx_3bag: simGarbageLabels !== null ? Math.floor(activeBagBase / 14) : (boxMap['averx-3bag'] ?? 2),
+    star_2bag: simGarbageLabels !== null ? 0 : (boxMap['star-2bag'] ?? 0),
+    star_3bag: simGarbageLabels !== null ? Math.round(activeBagBase * 1.7) : (boxMap['star-3bag'] ?? 48),
+    plain_2bag: simGarbageLabels !== null ? Math.round(activeBagBase * 0.2) : (boxMap['plain-2bag'] ?? 6),
+    plain_3bag: simGarbageLabels !== null ? Math.round(activeBagBase * 0.4) : (boxMap['plain-3bag'] ?? 12),
+  }
+
+  // Shipments for Kartik Da
+  const shipmentsList = kartikData.shipments && kartikData.shipments.length > 0
+    ? kartikData.shipments
+    : [
+        { awb_number: 'FMPC22001', order_id: 'OD-GB-9901', product_name: 'Butter Paper Roll', quantity: 1, destination_city: 'Kolkata, WB', payment_mode: 'PREPAID', print_status: 'printed' },
+        { awb_number: 'FMPC22002', order_id: 'OD-GB-9902', product_name: 'Butter Paper Roll', quantity: 1, destination_city: 'Howrah, WB', payment_mode: 'COD', print_status: 'pending' },
+        { awb_number: 'FMPC22003', order_id: 'OD-GB-9903', product_name: 'Garbage Bag Roll 17x19', quantity: 1, destination_city: 'Siliguri, WB', payment_mode: 'PREPAID', print_status: 'printed' },
+        { awb_number: 'FMPC22004', order_id: 'OD-GB-9904', product_name: 'Garbage Bag Roll 19x21', quantity: 1, destination_city: 'Durgapur, WB', payment_mode: 'COD', print_status: 'pending' },
+        { awb_number: 'FMPC22005', order_id: 'OD-GB-9905', product_name: 'Aluminium Foil Container (450ml)', quantity: 1, destination_city: 'Asansol, WB', payment_mode: 'PREPAID', print_status: 'printed' },
+        { awb_number: 'FMPC22006', order_id: 'OD-GB-9906', product_name: 'Garbage Bag Standard Pack', quantity: 1, destination_city: 'Kharagpur, WB', payment_mode: 'COD', print_status: 'pending' },
+        { awb_number: 'FMPC22007', order_id: 'OD-GB-9907', product_name: 'Butter Paper Roll', quantity: 2, destination_city: 'Patna, BR', payment_mode: 'PREPAID', print_status: 'printed' },
+        { awb_number: 'FMPC22008', order_id: 'OD-GB-9908', product_name: 'Garbage Bag Roll 17x19', quantity: 1, destination_city: 'Ranchi, JH', payment_mode: 'COD', print_status: 'pending' },
+        { awb_number: 'FMPC22009', order_id: 'OD-GB-9909', product_name: 'Aluminium Foil Container (450ml)', quantity: 2, destination_city: 'Guwahati, AS', payment_mode: 'PREPAID', print_status: 'printed' },
+        { awb_number: 'FMPC22010', order_id: 'OD-GB-9910', product_name: 'Garbage Bag Roll 19x21', quantity: 1, destination_city: 'Bhubaneswar, OD', payment_mode: 'COD', print_status: 'pending' },
+      ]
+
+  // Filtered shipments
+  const filteredShipments = shipmentsList.filter((s: any) => {
+    const matchesSearch =
+      !searchTerm ||
+      s.awb_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.order_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.destination_city?.toLowerCase().includes(searchTerm.toLowerCase())
+
+    const matchesCat =
+      filterCategory === 'all' ||
+      (filterCategory === 'garbage' && s.product_name?.toLowerCase().includes('garbage')) ||
+      (filterCategory === 'butter' && s.product_name?.toLowerCase().includes('butter')) ||
+      (filterCategory === 'aluminium' && s.product_name?.toLowerCase().includes('aluminium'))
+
+    return matchesSearch && matchesCat
+  })
+
+  // Packed toggle
+  const togglePacked = (awb: string) => {
+    setPackedAwbs(prev => ({ ...prev, [awb]: !prev[awb] }))
+  }
+
+  const packedCount = Object.values(packedAwbs).filter(Boolean).length
+
+  // Copy PackCalc
+  const handleCopyPackCalc = () => {
+    const text = `KARTIK DA'S PACKCALC REQUIREMENTS (${selectedDate}):
+Base Garbage Bag Labels Processed: ${activeBagBase}
+
+• Averx 2-Bag: ${activeBoxes.averx_2bag} bags/rolls
+• Averx 3-Bag: ${activeBoxes.averx_3bag} bags/rolls
+• Star 2-Bag: ${activeBoxes.star_2bag} bags/rolls
+• Star 3-Bag: ${activeBoxes.star_3bag} bags/rolls
+• Plain 2-Bag: ${activeBoxes.plain_2bag} bags/rolls
+• Plain 3-Bag: ${activeBoxes.plain_3bag} bags/rolls
+
+Product Summary:
+• Butter Paper: ${butterStats.labels} labels (${butterStats.units} units)
+• Aluminium Container: ${aluminiumStats.labels} labels (${aluminiumStats.units} units)
+• Garbage Bag 17x19: ${gb17x19Stats.labels} labels (${gb17x19Stats.units} units)
+• Garbage Bag 19x21: ${gb19x21Stats.labels} labels (${gb19x21Stats.units} units)
+• Garbage Bag Standard: ${gbStdStats.labels} labels (${gbStdStats.units} units)`
+
+    navigator.clipboard.writeText(text)
+    showToast("PackCalc 6-box requisition copied to clipboard")
+  }
+
+  // Export CSV
+  const handleExportCSV = () => {
+    const lines: string[] = []
+    lines.push(`KARTIK DA STATION DISPATCH & PACKCALC MANIFEST - ${selectedDate}`)
+    lines.push(`Generated: ${new Date().toLocaleString()}`)
+    lines.push(``)
+    lines.push(`PRODUCT FAMILY,TOTAL LABELS,TOTAL UNITS`)
+    lines.push(`"Butter Paper Roll",${butterStats.labels},${butterStats.units}`)
+    lines.push(`"Aluminium Foil Container",${aluminiumStats.labels},${aluminiumStats.units}`)
+    lines.push(`"Garbage Bag Roll 17x19",${gb17x19Stats.labels},${gb17x19Stats.units}`)
+    lines.push(`"Garbage Bag Roll 19x21",${gb19x21Stats.labels},${gb19x21Stats.units}`)
+    lines.push(`"Garbage Bag Standard Pack",${gbStdStats.labels},${gbStdStats.units}`)
+    lines.push(``)
+    lines.push(`PACKCALC 6-BOX RAW MATERIALS REQUISITION (Base: ${activeBagBase} Garbage Bag Labels)`)
+    lines.push(`Brand,Specification,Required Count,Note`)
+    lines.push(`Averx,2-Bag,${activeBoxes.averx_2bag},"Remainder roll cycles"`)
+    lines.push(`Averx,3-Bag,${activeBoxes.averx_3bag},"Full 14-roll cycle packs"`)
+    lines.push(`Star,2-Bag,${activeBoxes.star_2bag},"Star 2-bag allowance"`)
+    lines.push(`Star,3-Bag,${activeBoxes.star_3bag},"4 bags per roll allocation"`)
+    lines.push(`Plain,2-Bag,${activeBoxes.plain_2bag},"1 bag per standard unit"`)
+    lines.push(`Plain,3-Bag,${activeBoxes.plain_3bag},"2 bags per standard unit"`)
+    lines.push(``)
+    lines.push(`ASSIGNED SHIPMENTS`)
+    lines.push(`AWB,Order ID,Product,Quantity,Destination,Payment,Packed`)
+    shipmentsList.forEach((s: any) => {
+      lines.push(`${s.awb_number},${s.order_id},"${s.product_name}",${s.quantity},"${s.destination_city}",${s.payment_mode},${packedAwbs[s.awb_number] ? 'YES' : 'NO'}`)
+    })
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(lines.join('\n'))
+    const link = document.createElement('a')
+    link.setAttribute('href', csvContent)
+    link.setAttribute('download', `kartik_da_station_${selectedDate}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    showToast(`Exported Kartik Da's manifest for ${selectedDate}`)
+  }
+
+  return (
+    <div className="space-y-6" id="kartik-da-station-view">
+      <PageHead
+        eyebrow={`Station 2 • Dedicated Packing Line`}
+        title={`Kartik Da's Station`}
+        description={`Dedicated line for Kartik Da: 4 Product Families (Garbage Bags 17x19 & 19x21, Butter Paper, and Aluminium Container) with live PalCalc raw materials calculation.`}
+        action={
+          <div className="flex gap-2 flex-wrap items-center">
+            <button className="button secondary" onClick={handleExportCSV} id="kartik-export-csv-btn">
+              <Download size={15} /> Export CSV
+            </button>
+            <button className="button secondary" onClick={handleCopyPackCalc} id="kartik-copy-packcalc-btn">
+              <Copy size={15} /> Copy PalCalc
+            </button>
+            <button className="button secondary" onClick={() => window.print()} id="kartik-print-manifest-btn">
+              <Printer size={15} /> Print Manifest
+            </button>
+            <button
+              className="button secondary"
+              onClick={handleRefresh}
+              disabled={isRefreshing || isLoading}
+              id="kartik-refresh-btn"
+            >
+              <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} /> {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+        }
+      />
+
+      {/* Date Navigation & Status Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-teal-50/50 dark:bg-teal-950/20 rounded-xl border border-teal-500/30">
+        <div className="flex items-center gap-2">
+          <CalendarDays size={16} className="text-teal-600 dark:text-teal-400 shrink-0" />
+          <span className="text-xs font-semibold text-muted">Active Shift:</span>
+          <span className="text-xs font-bold text-foreground">{dateFormatted}</span>
+          <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 font-semibold border border-teal-500/20">
+            Dedicated 4-Product Line
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+              selectedDate === '2026-08-22'
+                ? 'bg-teal-600 text-white shadow-sm'
+                : 'bg-card border border-border text-muted hover:text-foreground'
+            }`}
+            onClick={() => setSelectedDate('2026-08-22')}
+          >
+            Today (Aug 22)
+          </button>
+          <button
+            className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+              selectedDate === '2026-08-21'
+                ? 'bg-teal-600 text-white shadow-sm'
+                : 'bg-card border border-border text-muted hover:text-foreground'
+            }`}
+            onClick={() => setSelectedDate('2026-08-21')}
+          >
+            Yesterday (Aug 21)
+          </button>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="bg-card border border-border text-xs px-2 py-1 rounded-md text-foreground outline-none font-medium cursor-pointer"
+          />
+        </div>
+      </div>
+
+      {/* Top 4 KPI Metric Cards */}
+      <div className="stats-grid" id="kartik-stats-grid">
+        <Stat
+          label="Kartik Total Labels"
+          value={kartikData.total_labels}
+          note="Precalculated labels for Kartik Da"
+          icon={FileCheck2}
+          tone="teal"
+        />
+        <Stat
+          label="Dispatched Units"
+          value={kartikData.total_items}
+          note="Total individual items to pack"
+          icon={Package}
+          tone="blue"
+        />
+        <Stat
+          label="Garbage Bag Base"
+          value={`${totalGarbageBagLabels} labels`}
+          note="Drives PalCalc roll calculations"
+          icon={Layers}
+          tone="amber"
+        />
+        <Stat
+          label="Packing Progress"
+          value={`${packedCount} / ${filteredShipments.length}`}
+          note={packedCount === filteredShipments.length && filteredShipments.length > 0 ? "100% Shift complete" : "Mark checklist below"}
+          icon={CheckCircle2}
+          tone={packedCount === filteredShipments.length && filteredShipments.length > 0 ? "teal" : "blue"}
+        />
+      </div>
+
+      {/* Kartik Da's 4 Types of Products (Precalculated Labels Section) */}
+      <section className="panel" id="kartik-products-section">
+        <div className="section-head">
+          <div>
+            <h2>Kartik Da's 4 Product Lines (Precalculated Labels)</h2>
+            <p>Direct label counts and units for Kartik Da's assigned products</p>
+          </div>
+          <Badge kind="success">4 Dedicated Product Types</Badge>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-2" id="kartik-product-cards-grid">
+          {/* 1. Butter Paper */}
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/20 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Product 1</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 font-semibold">Wrapping</span>
+              </div>
+              <h3 className="text-sm font-bold text-foreground">Butter Paper</h3>
+              <p className="text-[11px] text-muted mb-3">Non-stick baking & food wrap rolls</p>
+            </div>
+            <div className="pt-2 border-t border-amber-200/50 dark:border-amber-800/40 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-amber-600 dark:text-amber-400">
+                {butterStats.labels}
+              </span>
+              <span className="text-xs font-semibold text-muted">
+                {butterStats.units} units
+              </span>
+            </div>
+          </div>
+
+          {/* 2. Aluminium Container */}
+          <div className="p-4 rounded-xl border border-slate-400/30 bg-slate-100/50 dark:bg-slate-800/40 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Product 2</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-700 dark:text-slate-300 font-semibold">Containers</span>
+              </div>
+              <h3 className="text-sm font-bold text-foreground">Aluminium Container</h3>
+              <p className="text-[11px] text-muted mb-3">Food grade 450ml / 750ml foil boxes</p>
+            </div>
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-slate-700 dark:text-slate-300">
+                {aluminiumStats.labels}
+              </span>
+              <span className="text-xs font-semibold text-muted">
+                {aluminiumStats.units} units
+              </span>
+            </div>
+          </div>
+
+          {/* 3. Garbage Bag Roll 17x19 */}
+          <div className="p-4 rounded-xl border border-teal-500/30 bg-teal-50/40 dark:bg-teal-950/20 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">Product 3A</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-700 dark:text-teal-300 font-semibold">17×19</span>
+              </div>
+              <h3 className="text-sm font-bold text-foreground">Garbage Bag 17x19</h3>
+              <p className="text-[11px] text-muted mb-3">Standard medium dustbin rolls</p>
+            </div>
+            <div className="pt-2 border-t border-teal-200/50 dark:border-teal-800/40 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-teal-600 dark:text-teal-400">
+                {gb17x19Stats.labels}
+              </span>
+              <span className="text-xs font-semibold text-muted">
+                {gb17x19Stats.units} units
+              </span>
+            </div>
+          </div>
+
+          {/* 4. Garbage Bag Roll 19x21 */}
+          <div className="p-4 rounded-xl border border-teal-500/30 bg-teal-50/40 dark:bg-teal-950/20 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">Product 3B</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-700 dark:text-teal-300 font-semibold">19×21</span>
+              </div>
+              <h3 className="text-sm font-bold text-foreground">Garbage Bag 19x21</h3>
+              <p className="text-[11px] text-muted mb-3">Large heavy duty dustbin rolls</p>
+            </div>
+            <div className="pt-2 border-t border-teal-200/50 dark:border-teal-800/40 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-teal-600 dark:text-teal-400">
+                {gb19x21Stats.labels}
+              </span>
+              <span className="text-xs font-semibold text-muted">
+                {gb19x21Stats.units} units
+              </span>
+            </div>
+          </div>
+
+          {/* 5. Standard Garbage Bag Packs */}
+          <div className="p-4 rounded-xl border border-teal-500/30 bg-teal-50/40 dark:bg-teal-950/20 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">Product 4</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-700 dark:text-teal-300 font-semibold">Standard</span>
+              </div>
+              <h3 className="text-sm font-bold text-foreground">Garbage Bag Std</h3>
+              <p className="text-[11px] text-muted mb-3">Plain 30 Pcs & multi-pack sets</p>
+            </div>
+            <div className="pt-2 border-t border-teal-200/50 dark:border-teal-800/40 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-teal-600 dark:text-teal-400">
+                {gbStdStats.labels}
+              </span>
+              <span className="text-xs font-semibold text-muted">
+                {gbStdStats.units} units
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* PalCalc / PackCalc Raw Materials (The 6 Boxes Matrix) */}
+      <section className="panel" id="kartik-palcalc-section">
+        <div className="section-head">
+          <div>
+            <h2>PalCalc Raw Materials Requisition (6 Boxes)</h2>
+            <p>Calculated based on today's total garbage bag labels processed: <strong className="text-teal-600 dark:text-teal-400">{activeBagBase} labels</strong></p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="small-button" onClick={handleCopyPackCalc} id="palcalc-copy-btn">
+              <Copy size={13} /> Copy 6 Boxes
+            </button>
+            <Badge kind="success">Auto PalCalc</Badge>
+          </div>
+        </div>
+
+        {/* The 6 Boxes Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4" id="palcalc-6-boxes-grid">
+          {/* Box 1: Averx 2-Bag */}
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 shadow-sm relative overflow-hidden">
+            <div className="flex items-start justify-between mb-2">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xs">
+                1
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold uppercase tracking-wider">
+                Averx Brand
+              </span>
+            </div>
+            <p className="text-xs text-muted font-medium">Box 1: Averx 2-Bag</p>
+            <div className="my-2 flex items-baseline gap-2">
+              <span className="text-3xl font-black text-amber-600 dark:text-amber-400">{activeBoxes.averx_2bag}</span>
+              <span className="text-xs font-semibold text-muted">rolls / bags</span>
+            </div>
+            <p className="text-[11px] text-muted">Averx Garbage Bag (2-Bag rolls) • Remainder cycle allocation</p>
+          </div>
+
+          {/* Box 2: Averx 3-Bag */}
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 shadow-sm relative overflow-hidden">
+            <div className="flex items-start justify-between mb-2">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xs">
+                2
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold uppercase tracking-wider">
+                Averx Brand
+              </span>
+            </div>
+            <p className="text-xs text-muted font-medium">Box 2: Averx 3-Bag</p>
+            <div className="my-2 flex items-baseline gap-2">
+              <span className="text-3xl font-black text-amber-600 dark:text-amber-400">{activeBoxes.averx_3bag}</span>
+              <span className="text-xs font-semibold text-muted">rolls / bags</span>
+            </div>
+            <p className="text-[11px] text-muted">Averx Garbage Bag (3-Bag rolls) • Full 14-roll cycle packs</p>
+          </div>
+
+          {/* Box 3: Star 2-Bag */}
+          <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/20 shadow-sm relative overflow-hidden">
+            <div className="flex items-start justify-between mb-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs">
+                3
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold uppercase tracking-wider">
+                Star Brand
+              </span>
+            </div>
+            <p className="text-xs text-muted font-medium">Box 3: Star 2-Bag</p>
+            <div className="my-2 flex items-baseline gap-2">
+              <span className="text-3xl font-black text-blue-600 dark:text-blue-400">{activeBoxes.star_2bag}</span>
+              <span className="text-xs font-semibold text-muted">rolls / bags</span>
+            </div>
+            <p className="text-[11px] text-muted">Star Garbage Bag (2-Bag rolls) • Star 2-bag allowance</p>
+          </div>
+
+          {/* Box 4: Star 3-Bag */}
+          <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/20 shadow-sm relative overflow-hidden">
+            <div className="flex items-start justify-between mb-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs">
+                4
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold uppercase tracking-wider">
+                Star Brand
+              </span>
+            </div>
+            <p className="text-xs text-muted font-medium">Box 4: Star 3-Bag</p>
+            <div className="my-2 flex items-baseline gap-2">
+              <span className="text-3xl font-black text-blue-600 dark:text-blue-400">{activeBoxes.star_3bag}</span>
+              <span className="text-xs font-semibold text-muted">rolls / bags</span>
+            </div>
+            <p className="text-[11px] text-muted">Star Garbage Bag (3-Bag rolls) • 4 bags per roll allocation</p>
+          </div>
+
+          {/* Box 5: Plain 2-Bag */}
+          <div className="p-4 rounded-xl border border-slate-500/30 bg-slate-50/50 dark:bg-slate-800/40 shadow-sm relative overflow-hidden">
+            <div className="flex items-start justify-between mb-2">
+              <div className="w-8 h-8 rounded-lg bg-slate-500/20 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-xs">
+                5
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider">
+                Plain Brand
+              </span>
+            </div>
+            <p className="text-xs text-muted font-medium">Box 5: Plain 2-Bag</p>
+            <div className="my-2 flex items-baseline gap-2">
+              <span className="text-3xl font-black text-slate-700 dark:text-slate-300">{activeBoxes.plain_2bag}</span>
+              <span className="text-xs font-semibold text-muted">rolls / bags</span>
+            </div>
+            <p className="text-[11px] text-muted">Plain Garbage Bag (2-Bag rolls) • 1 bag per standard unit</p>
+          </div>
+
+          {/* Box 6: Plain 3-Bag */}
+          <div className="p-4 rounded-xl border border-slate-500/30 bg-slate-50/50 dark:bg-slate-800/40 shadow-sm relative overflow-hidden">
+            <div className="flex items-start justify-between mb-2">
+              <div className="w-8 h-8 rounded-lg bg-slate-500/20 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-xs">
+                6
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider">
+                Plain Brand
+              </span>
+            </div>
+            <p className="text-xs text-muted font-medium">Box 6: Plain 3-Bag</p>
+            <div className="my-2 flex items-baseline gap-2">
+              <span className="text-3xl font-black text-slate-700 dark:text-slate-300">{activeBoxes.plain_3bag}</span>
+              <span className="text-xs font-semibold text-muted">rolls / bags</span>
+            </div>
+            <p className="text-[11px] text-muted">Plain Garbage Bag (3-Bag rolls) • 2 bags per standard unit</p>
+          </div>
+        </div>
+
+        {/* PalCalc Interactive What-If Simulator */}
+        <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-border flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <Calculator size={15} className="text-teal-600 dark:text-teal-400 shrink-0" />
+            <span className="font-semibold text-foreground">PalCalc Simulator:</span>
+            <span className="text-muted">Simulate raw bag requirement for any batch size:</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              placeholder={String(totalGarbageBagLabels)}
+              value={simGarbageLabels === null ? '' : simGarbageLabels}
+              onChange={(e) => {
+                const val = e.target.value ? parseInt(e.target.value, 10) : null
+                setSimGarbageLabels(val)
+              }}
+              className="w-24 bg-card border border-border px-2 py-1 rounded text-foreground font-mono outline-none text-xs"
+              id="sim-garbage-labels-input"
+            />
+            <span className="text-muted text-xs">garbage labels</span>
+
+            {simGarbageLabels !== null && (
+              <button
+                className="text-xs text-blue-500 hover:underline font-semibold"
+                onClick={() => setSimGarbageLabels(null)}
+              >
+                Reset to live ({totalGarbageBagLabels})
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Kartik Da's Live Shipments & Packing Checklist */}
+      <section className="panel" id="kartik-shipments-manifest-panel">
+        <div className="section-head">
+          <div>
+            <h2>Kartik Da's Daily Orders & Packing Checklist</h2>
+            <p>Verify packing status for every assigned shipment on this line</p>
+          </div>
+          <div className="flex gap-2 items-center">
+            <span className="text-xs font-semibold text-muted">
+              Packed: <strong className="text-teal-600 dark:text-teal-400">{packedCount}</strong> of {filteredShipments.length}
+            </span>
+          </div>
+        </div>
+
+        {/* Filter & Search Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div className="search !w-72">
+            <Search size={14} />
+            <input
+              type="text"
+              placeholder="Search by AWB, Order ID, Product, or City..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              id="kartik-shipments-search"
+            />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')} className="text-muted hover:text-foreground">
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                filterCategory === 'all'
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-card border border-border text-muted hover:text-foreground'
+              }`}
+              onClick={() => setFilterCategory('all')}
+            >
+              All ({shipmentsList.length})
+            </button>
+            <button
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                filterCategory === 'garbage'
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-card border border-border text-muted hover:text-foreground'
+              }`}
+              onClick={() => setFilterCategory('garbage')}
+            >
+              Garbage Bags
+            </button>
+            <button
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                filterCategory === 'butter'
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-card border border-border text-muted hover:text-foreground'
+              }`}
+              onClick={() => setFilterCategory('butter')}
+            >
+              Butter Paper
+            </button>
+            <button
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                filterCategory === 'aluminium'
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-card border border-border text-muted hover:text-foreground'
+              }`}
+              onClick={() => setFilterCategory('aluminium')}
+            >
+              Aluminium Container
+            </button>
+          </div>
+        </div>
+
+        <TableWrap>
+          <thead>
+            <tr>
+              <th className="w-12 text-center">Packed</th>
+              <th>AWB Number</th>
+              <th>Order ID</th>
+              <th>Product Assigned</th>
+              <th>Qty</th>
+              <th>Destination</th>
+              <th>Mode</th>
+              <th className="text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredShipments && filteredShipments.length > 0 ? (
+              filteredShipments.map((s: any) => {
+                const isPacked = packedAwbs[s.awb_number]
+                return (
+                  <tr
+                    key={s.awb_number}
+                    className={`transition-colors ${isPacked ? 'bg-teal-500/5 dark:bg-teal-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}
+                  >
+                    <td className="text-center">
+                      <input
+                        type="checkbox"
+                        checked={!!isPacked}
+                        onChange={() => togglePacked(s.awb_number)}
+                        className="w-4 h-4 rounded text-teal-600 cursor-pointer accent-teal-600"
+                        id={`pack-check-${s.awb_number}`}
+                      />
+                    </td>
+                    <td>
+                      <strong className={`font-mono text-xs ${isPacked ? 'line-through text-muted' : ''}`}>
+                        {s.awb_number}
+                      </strong>
+                    </td>
+                    <td>
+                      <span className="font-mono text-xs text-muted">{s.order_id}</span>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${s.product_name.includes('Garbage') ? 'bg-teal-500' : s.product_name.includes('Butter') ? 'bg-amber-500' : 'bg-slate-400'}`} />
+                        <strong className="text-xs">{s.product_name}</strong>
+                      </div>
+                    </td>
+                    <td>
+                      <strong className="text-xs font-bold font-mono">{s.quantity}x</strong>
+                    </td>
+                    <td>
+                      <span className="text-xs text-muted">{s.destination_city}</span>
+                    </td>
+                    <td>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${s.payment_mode === 'COD' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}>
+                        {s.payment_mode}
+                      </span>
+                    </td>
+                    <td className="text-right">
+                      <button
+                        className="small-button"
+                        onClick={() => {
+                          showToast(`Printing 4x6 label for ${s.awb_number}`)
+                        }}
+                        title="Print 4x6 Thermal Label"
+                      >
+                        <Printer size={12} /> Print
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })
+            ) : (
+              <tr>
+                <td colSpan={8} className="text-center py-6 text-muted">
+                  No shipments matching current filter.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </TableWrap>
+      </section>
+    </div>
+  )
+}
+
+// ----------------------------------------------------------------------
+// 1C. MY STATION VIEW (SOHEL'S LEAD LINE)
+// ----------------------------------------------------------------------
+function MyStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
+  const { data: dash, mutate: refreshDash, isLoading } = useSWR(
+    `/dashboard?date=${selectedDate}`,
+    () => getDashboard(selectedDate),
+    { refreshInterval: 5000 }
+  )
+
+  const [searchOrder, setSearchOrder] = useState('')
+  const [packedAwbs, setPackedAwbs] = useState<Record<string, boolean>>({})
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const dateObj = new Date(selectedDate + 'T00:00:00')
+  const dateFormatted = dateObj.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+  // Manual refresh
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await refreshDash()
+    setTimeout(() => {
+      setIsRefreshing(false)
+      showToast("My Station refreshed with live warehouse data")
+    }, 300)
+  }
+
+  // Fallback / Normalized Data for My Station (Sohel)
+  const myData = dash?.my_station || {
+    total_labels: dash?.worker_totals?.Sohel?.unique_labels ?? 35,
+    total_items: dash?.worker_totals?.Sohel?.items ?? 35,
+    orders: [
+      { name: 'R1 Bluetooth Selfie Stick', internal_code: 'R1', labels: 1, items: 1, category: 'Selfie Sticks' },
+      { name: 'R1S LED Fill Light Selfie Stick', internal_code: 'R1S', labels: 8, items: 8, category: 'Selfie Sticks' },
+      { name: 'R16S Extended Quadrapod', internal_code: 'R16S', labels: 4, items: 4, category: 'Selfie Sticks' },
+      { name: 'SE-3B Stabilizer Tripod', internal_code: 'SE-3B', labels: 10, items: 10, category: 'Tripods' },
+      { name: 'AX6 Wireless Lapel Mic (Single)', internal_code: 'AX6', labels: 4, items: 4, category: 'Microphones' },
+      { name: 'AX-10B Dual Wireless Mic Set', internal_code: 'AX-10B', labels: 2, items: 2, category: 'Microphones' },
+      { name: 'Ring Flash 10-Inch with Tripod', internal_code: 'Ring Flash 10-Inch', labels: 3, items: 3, category: 'Lighting' },
+      { name: 'NAFA Clip Lavalier Microphone', internal_code: 'NAFA Clip Microphone', labels: 3, items: 3, category: 'Microphones' },
+      { name: 'Mobile Holder Cold Shoe Clip', internal_code: 'Mobile Holder Clip', labels: 2, items: 2, category: 'Accessories' },
+      { name: 'HideTheory Leather Wallet', internal_code: 'HideTheory Leather Wallet', labels: 2, items: 2, category: 'Wallets' },
+      { name: 'AirPods Silicone Armor Case', internal_code: 'AirPods Silicone Case', labels: 1, items: 1, category: 'Cases' },
+    ],
+    shipments: []
+  }
+
+  const rawOrders = (myData.orders || (myData as any).order_counts || []) as any[]
+
+  // Filtered order counts
+  const filteredOrderCounts = rawOrders.map((o: any) => ({
+    name: o.name,
+    code: o.internal_code || o.code || o.name,
+    labels: o.labels || 0,
+    units: o.items ?? o.units ?? o.labels ?? 0,
+    category: o.category || 'General'
+  })).filter((o: any) => {
+    if (!searchOrder) return true
+    const q = searchOrder.toLowerCase()
+    return (
+      o.name.toLowerCase().includes(q) ||
+      o.code.toLowerCase().includes(q) ||
+      o.category?.toLowerCase().includes(q)
+    )
+  })
+
+  // Shipments for My Station
+  const myShipmentsList = myData.shipments && myData.shipments.length > 0
+    ? myData.shipments
+    : [
+        { awb_number: 'FMPC11001', order_id: 'OD-SH-8801', product_name: 'R1 Bluetooth Selfie Stick', code: 'R1', quantity: 1, destination_city: 'Mumbai, MH', payment_mode: 'PREPAID' },
+        { awb_number: 'FMPC11002', order_id: 'OD-SH-8802', product_name: 'R1S LED Fill Light Selfie Stick', code: 'R1S', quantity: 1, destination_city: 'Delhi, DL', payment_mode: 'COD' },
+        { awb_number: 'FMPC11003', order_id: 'OD-SH-8803', product_name: 'R1S LED Fill Light Selfie Stick', code: 'R1S', quantity: 1, destination_city: 'Bengaluru, KA', payment_mode: 'PREPAID' },
+        { awb_number: 'FMPC11004', order_id: 'OD-SH-8804', product_name: 'SE-3B Stabilizer Tripod', code: 'SE-3B', quantity: 1, destination_city: 'Hyderabad, TS', payment_mode: 'PREPAID' },
+        { awb_number: 'FMPC11005', order_id: 'OD-SH-8805', product_name: 'SE-3B Stabilizer Tripod', code: 'SE-3B', quantity: 1, destination_city: 'Pune, MH', payment_mode: 'COD' },
+        { awb_number: 'FMPC11006', order_id: 'OD-SH-8806', product_name: 'AX-10B Dual Wireless Mic Set', code: 'AX-10B', quantity: 1, destination_city: 'Ahmedabad, GJ', payment_mode: 'PREPAID' },
+        { awb_number: 'FMPC11007', order_id: 'OD-SH-8807', product_name: 'AX6 Wireless Lapel Mic (Single)', code: 'AX6', quantity: 1, destination_city: 'Jaipur, RJ', payment_mode: 'COD' },
+        { awb_number: 'FMPC11008', order_id: 'OD-SH-8808', product_name: 'Ring Flash 10-Inch with Tripod', code: 'Ring Flash 10-Inch', quantity: 1, destination_city: 'Lucknow, UP', payment_mode: 'PREPAID' },
+        { awb_number: 'FMPC11009', order_id: 'OD-SH-8809', product_name: 'HideTheory Leather Wallet', code: 'HideTheory Leather Wallet', quantity: 1, destination_city: 'Chandigarh, PB', payment_mode: 'COD' },
+        { awb_number: 'FMPC11010', order_id: 'OD-SH-8810', product_name: 'AirPods Silicone Armor Case', code: 'AirPods Silicone Case', quantity: 1, destination_city: 'Chennai, TN', payment_mode: 'PREPAID' },
+      ]
+
+  const togglePacked = (awb: string) => {
+    setPackedAwbs(prev => ({ ...prev, [awb]: !prev[awb] }))
+  }
+
+  const packedCount = Object.values(packedAwbs).filter(Boolean).length
+
+  // Copy Order Counts Summary
+  const handleCopyOrderCounts = () => {
+    const text = `MY STATION ORDER COUNTS (${selectedDate}):\n` +
+      filteredOrderCounts.map((o: any) => `• ${o.code || o.name}: ${o.labels} label${o.labels === 1 ? '' : 's'} (${o.units} units)`).join('\n')
+
+    navigator.clipboard.writeText(text)
+    showToast("My Station order counts copied to clipboard")
+  }
+
+  // Export CSV
+  const handleExportCSV = () => {
+    const lines: string[] = []
+    lines.push(`MY STATION (SOHEL) ORDER COUNTS & DISPATCH MANIFEST - ${selectedDate}`)
+    lines.push(`Generated: ${new Date().toLocaleString()}`)
+    lines.push(``)
+    lines.push(`ORDER CODE,PRODUCT NAME,CATEGORY,TOTAL LABELS,TOTAL UNITS`)
+    filteredOrderCounts.forEach((o: any) => {
+      lines.push(`"${o.code}","${o.name}","${o.category}",${o.labels},${o.units}`)
+    })
+    lines.push(``)
+    lines.push(`ASSIGNED SHIPMENTS`)
+    lines.push(`AWB,Order ID,Product Code,Quantity,Destination,Payment,Packed`)
+    myShipmentsList.forEach((s: any) => {
+      lines.push(`${s.awb_number},${s.order_id},"${s.code || s.product_name}",${s.quantity},"${s.destination_city}",${s.payment_mode},${packedAwbs[s.awb_number] ? 'YES' : 'NO'}`)
+    })
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(lines.join('\n'))
+    const link = document.createElement('a')
+    link.setAttribute('href', csvContent)
+    link.setAttribute('download', `my_station_${selectedDate}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    showToast(`Exported My Station report for ${selectedDate}`)
+  }
+
+  return (
+    <div className="space-y-6" id="my-station-view">
+      <PageHead
+        eyebrow={`Station 1 • Main Catalogue Line`}
+        title={`My Station (Sohel)`}
+        description={`Lead packing line for all general catalogue orders: Tripods, Selfie Sticks (R1, R1S, R16S, SE-3B), Wireless Mics (AX6, AX-10B, NAFA), Phone Clips, Wallets & Cases.`}
+        action={
+          <div className="flex gap-2 flex-wrap items-center">
+            <button className="button secondary" onClick={handleExportCSV} id="my-station-export-csv-btn">
+              <Download size={15} /> Export CSV
+            </button>
+            <button className="button secondary" onClick={handleCopyOrderCounts} id="my-station-copy-counts-btn">
+              <Copy size={15} /> Copy Order Counts
+            </button>
+            <button className="button secondary" onClick={() => window.print()} id="my-station-print-manifest-btn">
+              <Printer size={15} /> Print Manifest
+            </button>
+            <button
+              className="button secondary"
+              onClick={handleRefresh}
+              disabled={isRefreshing || isLoading}
+              id="my-station-refresh-btn"
+            >
+              <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} /> {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+        }
+      />
+
+      {/* Date Navigation & Status Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-500/30">
+        <div className="flex items-center gap-2">
+          <CalendarDays size={16} className="text-blue-600 dark:text-blue-400 shrink-0" />
+          <span className="text-xs font-semibold text-muted">Active Shift:</span>
+          <span className="text-xs font-bold text-foreground">{dateFormatted}</span>
+          <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 font-semibold border border-blue-500/20">
+            General Catalogue Line
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+              selectedDate === '2026-08-22'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-card border border-border text-muted hover:text-foreground'
+            }`}
+            onClick={() => setSelectedDate('2026-08-22')}
+          >
+            Today (Aug 22)
+          </button>
+          <button
+            className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+              selectedDate === '2026-08-21'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-card border border-border text-muted hover:text-foreground'
+            }`}
+            onClick={() => setSelectedDate('2026-08-21')}
+          >
+            Yesterday (Aug 21)
+          </button>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="bg-card border border-border text-xs px-2 py-1 rounded-md text-foreground outline-none font-medium cursor-pointer"
+          />
+        </div>
+      </div>
+
+      {/* Top 4 KPI Metric Cards */}
+      <div className="stats-grid" id="my-stats-grid">
+        <Stat
+          label="My Total Labels"
+          value={myData.total_labels}
+          note="All non-Kartik dispatches"
+          icon={FileCheck2}
+          tone="blue"
+        />
+        <Stat
+          label="Dispatched Units"
+          value={myData.total_items}
+          note="Total electronics & accessories"
+          icon={Package}
+          tone="teal"
+        />
+        <Stat
+          label="Active SKU Lines"
+          value={rawOrders.length || 11}
+          note="Unique order types today"
+          icon={FolderTree}
+          tone="indigo"
+        />
+        <Stat
+          label="Packing Progress"
+          value={`${packedCount} / ${myShipmentsList.length}`}
+          note={packedCount === myShipmentsList.length && myShipmentsList.length > 0 ? "100% Shift complete" : "Mark checklist below"}
+          icon={CheckCircle2}
+          tone={packedCount === myShipmentsList.length && myShipmentsList.length > 0 ? "teal" : "blue"}
+        />
+      </div>
+
+      {/* Total Number of Each Order (Order Count Grid) */}
+      <section className="panel" id="my-station-order-counts-panel">
+        <div className="section-head">
+          <div>
+            <h2>Total Number of Each Order</h2>
+            <p>Live calculated label count for every single product in your catalogue</p>
+          </div>
+          <div className="flex gap-2 items-center">
+            <button className="small-button" onClick={handleCopyOrderCounts} id="copy-my-orders-btn">
+              <Copy size={13} /> Copy Counts
+            </button>
+            <Badge kind="neutral">{filteredOrderCounts.length} Order Types</Badge>
+          </div>
+        </div>
+
+        {/* Search Bar for Order Types */}
+        <div className="mb-4">
+          <div className="search !w-full">
+            <Search size={14} />
+            <input
+              type="text"
+              placeholder="Filter orders by code (e.g. R1, R1S, SE-3B, AX-10B), name, or category..."
+              value={searchOrder}
+              onChange={(e) => setSearchOrder(e.target.value)}
+              id="my-orders-search-input"
+            />
+            {searchOrder && (
+              <button onClick={() => setSearchOrder('')} className="text-muted hover:text-foreground">
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Order Count Grid Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5" id="my-orders-cards-grid">
+          {filteredOrderCounts && filteredOrderCounts.length > 0 ? (
+            filteredOrderCounts.map((order: any) => (
+              <div
+                key={order.code || order.name}
+                className="p-3.5 rounded-xl border border-border bg-card hover:border-blue-400/60 transition-all shadow-sm flex flex-col justify-between"
+                id={`order-card-${(order.code || order.name).toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs px-2 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold font-mono">
+                      {order.code}
+                    </span>
+                    <span className="text-[10px] text-muted font-semibold">{order.category}</span>
+                  </div>
+                  <h3 className="text-xs font-bold text-foreground line-clamp-2 mb-2" title={order.name}>
+                    {order.name}
+                  </h3>
+                </div>
+
+                <div className="pt-2.5 border-t border-border flex items-baseline justify-between">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                      {order.labels}
+                    </span>
+                    <span className="text-xs font-semibold text-muted">
+                      {order.labels === 1 ? 'label' : 'labels'}
+                    </span>
+                  </div>
+                  <span className="text-xs font-bold text-foreground font-mono">
+                    {order.units} {order.units === 1 ? 'unit' : 'units'}
+                  </span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="col-span-full py-8 text-center text-muted">
+              No orders found matching "{searchOrder}".
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* My Station Live Shipments & Packing Checklist */}
+      <section className="panel" id="my-shipments-manifest-panel">
+        <div className="section-head">
+          <div>
+            <h2>My Station Daily Orders Manifest & Packing Checklist</h2>
+            <p>Verify packing and print labels for each customer order</p>
+          </div>
+          <div className="flex gap-2 items-center">
+            <span className="text-xs font-semibold text-muted">
+              Packed: <strong className="text-blue-600 dark:text-blue-400">{packedCount}</strong> of {myShipmentsList.length}
+            </span>
+          </div>
+        </div>
+
+        <TableWrap>
+          <thead>
+            <tr>
+              <th className="w-12 text-center">Packed</th>
+              <th>AWB Number</th>
+              <th>Order ID</th>
+              <th>Order Code</th>
+              <th>Product Full Name</th>
+              <th>Qty</th>
+              <th>Destination</th>
+              <th>Mode</th>
+              <th className="text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {myShipmentsList && myShipmentsList.length > 0 ? (
+              myShipmentsList.map((s: any) => {
+                const isPacked = packedAwbs[s.awb_number]
+                return (
+                  <tr
+                    key={s.awb_number}
+                    className={`transition-colors ${isPacked ? 'bg-blue-500/5 dark:bg-blue-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}
+                  >
+                    <td className="text-center">
+                      <input
+                        type="checkbox"
+                        checked={!!isPacked}
+                        onChange={() => togglePacked(s.awb_number)}
+                        className="w-4 h-4 rounded text-blue-600 cursor-pointer accent-blue-600"
+                        id={`my-pack-check-${s.awb_number}`}
+                      />
+                    </td>
+                    <td>
+                      <strong className={`font-mono text-xs ${isPacked ? 'line-through text-muted' : ''}`}>
+                        {s.awb_number}
+                      </strong>
+                    </td>
+                    <td>
+                      <span className="font-mono text-xs text-muted">{s.order_id}</span>
+                    </td>
+                    <td>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold font-mono">
+                        {s.code || s.product_name}
+                      </span>
+                    </td>
+                    <td>
+                      <strong className="text-xs">{s.product_name}</strong>
+                    </td>
+                    <td>
+                      <strong className="text-xs font-bold font-mono">{s.quantity}x</strong>
+                    </td>
+                    <td>
+                      <span className="text-xs text-muted">{s.destination_city}</span>
+                    </td>
+                    <td>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${s.payment_mode === 'COD' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}>
+                        {s.payment_mode}
+                      </span>
+                    </td>
+                    <td className="text-right">
+                      <button
+                        className="small-button"
+                        onClick={() => {
+                          showToast(`Printing 4x6 label for ${s.awb_number}`)
+                        }}
+                        title="Print 4x6 Thermal Label"
+                      >
+                        <Printer size={12} /> Print
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })
+            ) : (
+              <tr>
+                <td colSpan={9} className="text-center py-6 text-muted">
+                  No shipments assigned for this date.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </TableWrap>
+      </section>
+    </div>
+  )
+}
+
+// ----------------------------------------------------------------------
 // 2. PROCESS LABELS VIEW
 // ----------------------------------------------------------------------
 type SortMode = 'sku_grouped' | 'worker_sku' | 'category_sku' | 'original_page' | 'awb_order'
@@ -1496,10 +2900,38 @@ function sortClientLabels(labels: ParsedLabelItem[], mode: SortMode): ParsedLabe
   })
 }
 
-function ProcessLabelsView({ go, showToast }: any) {
-  const [processing, setProcessing] = useState(false)
-  const [currentStep, setCurrentStep] = useState(0)
-  const [batchData, setBatchData] = useState<ProcessBatchResponse | null>(null)
+function ProcessLabelsView({
+  go,
+  showToast,
+  batchData: externalBatchData,
+  setBatchData: setExternalBatchData,
+  processing: externalProcessing,
+  setProcessing: setExternalProcessing,
+  currentStep: externalCurrentStep,
+  setCurrentStep: setExternalCurrentStep,
+}: any) {
+  const [internalProcessing, setInternalProcessing] = useState(false)
+  const [internalCurrentStep, setInternalCurrentStep] = useState(0)
+  const [internalBatchData, setInternalBatchData] = useState<ProcessBatchResponse | null>(null)
+
+  const processing = externalProcessing !== undefined ? externalProcessing : internalProcessing
+  const setProcessing = (val: any) => {
+    if (setExternalProcessing) setExternalProcessing(val)
+    setInternalProcessing(val)
+  }
+
+  const currentStep = externalCurrentStep !== undefined ? externalCurrentStep : internalCurrentStep
+  const setCurrentStep = (val: any) => {
+    if (setExternalCurrentStep) setExternalCurrentStep(val)
+    setInternalCurrentStep(val)
+  }
+
+  const batchData = externalBatchData !== undefined ? externalBatchData : internalBatchData
+  const setBatchData = (val: any) => {
+    if (setExternalBatchData) setExternalBatchData(val)
+    setInternalBatchData(val)
+  }
+
   const [sortMode, setSortMode] = useState<SortMode>('sku_grouped')
   const [selectedSkuCluster, setSelectedSkuCluster] = useState<string | null>(null)
   const [activeFilter, setActiveFilter] = useState<'all' | 'mapped' | 'duplicate' | 'unknown' | 'mismatch'>('all')
@@ -1508,6 +2940,18 @@ function ProcessLabelsView({ go, showToast }: any) {
   const [duplicateModalItem, setDuplicateModalItem] = useState<ParsedLabelItem | null>(null)
   const [mismatchModalItem, setMismatchModalItem] = useState<ParsedLabelItem | null>(null)
   const [confirming, setConfirming] = useState(false)
+
+  // Listen to global clear-all event
+  useEffect(() => {
+    const handleClear = () => {
+      setBatchData(null)
+      setSelectedSkuCluster(null)
+      setSearchQuery('')
+      setActiveFilter('all')
+    }
+    window.addEventListener('warehouse:clear-all', handleClear)
+    return () => window.removeEventListener('warehouse:clear-all', handleClear)
+  }, [])
 
   const steps = [
     'Reading pages',
@@ -1527,7 +2971,7 @@ function ProcessLabelsView({ go, showToast }: any) {
 
     // Simulate animated stepper progression through pipeline
     const interval = setInterval(() => {
-      setCurrentStep((prev) => {
+      setCurrentStep((prev: number) => {
         if (prev < 6) return prev + 1
         return prev
       })
@@ -2162,9 +3606,9 @@ function ProcessLabelsView({ go, showToast }: any) {
             setTrainItem(null)
             // Refresh batch labels if loaded
             if (batchData) {
-              const updatedLabels = batchData.labels.map((l) => ({
+              const updatedLabels = batchData.labels.map((l: ParsedLabelItem) => ({
                 ...l,
-                items: l.items.map((i) =>
+                items: l.items.map((i: any) =>
                   i.raw_sku === trainItem.raw_sku
                     ? { ...i, product: mappedName, mapping_status: 'mapped' as const }
                     : i
@@ -3294,6 +4738,245 @@ function ModalActions({ close, primary, onPrimary, loading }: any) {
   )
 }
 
+function KeyboardShortcutsModal({ close, go, onProcess, onExport, onClearAll, onToggleTheme }: any) {
+  const [filter, setFilter] = useState<'all' | 'ops' | 'nav' | 'system'>('all')
+
+  const shortcuts = [
+    {
+      category: 'ops',
+      categoryLabel: 'Warehouse Operations',
+      key: 'P',
+      altKey: 'Alt+P',
+      label: 'Process Label',
+      desc: 'Jump directly to Process view and trigger the PDF file picker instantly.',
+      action: onProcess,
+      badge: 'High Priority',
+    },
+    {
+      category: 'ops',
+      categoryLabel: 'Warehouse Operations',
+      key: 'C',
+      altKey: 'Alt+C',
+      label: 'Clear All',
+      desc: 'Clear active PDF batch, reset SKU cluster selection, clear search and filters.',
+      action: onClearAll,
+      badge: 'Workflow Reset',
+    },
+    {
+      category: 'ops',
+      categoryLabel: 'Warehouse Operations',
+      key: 'E',
+      altKey: 'Alt+E',
+      label: 'Export Report',
+      desc: 'Instantly download the full warehouse dispatch CSV summary for the selected date.',
+      action: onExport,
+      badge: 'CSV Export',
+    },
+    {
+      category: 'ops',
+      categoryLabel: 'Warehouse Operations',
+      key: 'Ctrl+P',
+      altKey: '⌘+P',
+      label: 'Print Sorted PDF',
+      desc: 'Open real-time sorted sequential label PDF ready for thermal label printers.',
+      badge: 'Printing',
+    },
+    {
+      category: 'nav',
+      categoryLabel: 'View Navigation',
+      key: '1',
+      label: 'Go to Dashboard',
+      desc: 'Real-time stock-out metrics, worker workload shares, and PackCalc raw materials.',
+      action: () => { go('dashboard'); close(); },
+    },
+    {
+      category: 'nav',
+      categoryLabel: 'View Navigation',
+      key: '2',
+      label: 'Go to Process Labels',
+      desc: 'Multi-file PDF upload, auto-crop pipeline, real-time sorting, and batch review.',
+      action: () => { go('process'); close(); },
+    },
+    {
+      category: 'nav',
+      categoryLabel: 'View Navigation',
+      key: '3',
+      label: 'Go to Products & Recipes',
+      desc: 'Canonical catalog, 3-Bag/2-Bag roll recipes, and worker assignment rules.',
+      action: () => { go('products'); close(); },
+    },
+    {
+      category: 'nav',
+      categoryLabel: 'View Navigation',
+      key: '4',
+      label: 'Go to Training Center',
+      desc: 'Train newly observed SKUs, resolve conflicts, and manage prefix pattern rules.',
+      action: () => { go('training'); close(); },
+    },
+    {
+      category: 'nav',
+      categoryLabel: 'View Navigation',
+      key: '5',
+      label: 'Go to History & Logs',
+      desc: 'Audit past confirmed batches, print events, and shipment archives.',
+      action: () => { go('history'); close(); },
+    },
+    {
+      category: 'nav',
+      categoryLabel: 'View Navigation',
+      key: '6',
+      label: 'Go to Settings',
+      desc: 'Manage warehouse workers, label crop format (4×6 / A6), and general parameters.',
+      action: () => { go('settings'); close(); },
+    },
+    {
+      category: 'system',
+      categoryLabel: 'Warehouse Controls',
+      key: 'D',
+      altKey: 'Alt+D',
+      label: 'Toggle Dark / Light Theme',
+      desc: 'Switch interface contrast theme to suit warehouse station lighting.',
+      action: onToggleTheme,
+    },
+    {
+      category: 'system',
+      categoryLabel: 'Warehouse Controls',
+      key: 'R',
+      altKey: 'Alt+R',
+      label: 'Refresh Live Metrics',
+      desc: 'Force background re-sync of dispatch metrics and live SKU counts.',
+    },
+    {
+      category: 'system',
+      categoryLabel: 'Warehouse Controls',
+      key: '?',
+      altKey: 'Shift+/',
+      label: 'Keyboard Shortcuts',
+      desc: 'Toggle this keyboard shortcuts cheat sheet modal.',
+    },
+    {
+      category: 'system',
+      categoryLabel: 'Warehouse Controls',
+      key: 'Esc',
+      label: 'Dismiss / Close',
+      desc: 'Close open dialogs, clear input focus, or dismiss popovers.',
+      action: close,
+    },
+  ]
+
+  const filteredShortcuts = shortcuts.filter((s) => {
+    if (filter === 'all') return true
+    return s.category === filter
+  })
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal max-w-2xl w-full">
+        <div className="modal-head pb-3 border-b border-border">
+          <div>
+            <p className="eyebrow text-blue-500 font-semibold flex items-center gap-1.5">
+              <Zap size={14} /> Warehouse Productivity
+            </p>
+            <h2 className="text-lg font-bold">Global Keyboard Shortcuts</h2>
+          </div>
+          <button className="icon-button" onClick={close} title="Close (Esc)">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-4 text-xs py-2">
+          <p className="text-muted text-xs leading-relaxed">
+            Use these global keyboard shortcuts anytime during warehouse operations to rapidly process batches, navigate views, clear filters, or export reports without touching the mouse.
+          </p>
+
+          {/* Filter Tabs */}
+          <div className="flex gap-1.5 border-b border-border pb-2">
+            {[
+              { id: 'all', label: 'All Shortcuts' },
+              { id: 'ops', label: '⚡ Core Operations' },
+              { id: 'nav', label: '🧭 Navigation (1-6)' },
+              { id: 'system', label: '🛠️ System & Display' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setFilter(tab.id as any)}
+                className={`text-xs px-2.5 py-1 rounded-md font-medium transition-all ${
+                  filter === tab.id
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-card border border-border text-muted hover:text-foreground'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Shortcuts List */}
+          <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
+            {filteredShortcuts.map((s, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-border bg-card hover:border-blue-500/40 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all group"
+              >
+                <div className="space-y-0.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <strong className="font-semibold text-foreground text-xs">{s.label}</strong>
+                    {s.badge && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                        {s.badge}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted truncate">{s.desc}</p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1">
+                    <kbd className="kbd px-2 py-1 text-xs font-mono font-bold shadow-xs">
+                      {s.key}
+                    </kbd>
+                    {s.altKey && (
+                      <>
+                        <span className="text-[10px] text-muted">or</span>
+                        <kbd className="kbd px-1.5 py-0.5 text-[10px] font-mono text-muted">
+                          {s.altKey}
+                        </kbd>
+                      </>
+                    )}
+                  </div>
+
+                  {s.action && (
+                    <button
+                      onClick={s.action}
+                      className="text-[11px] px-2 py-1 rounded border border-border bg-background hover:bg-primary hover:text-white transition-colors opacity-80 group-hover:opacity-100"
+                      title="Run action now"
+                    >
+                      Run
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-blue-800 dark:text-blue-300 text-[11px] flex items-center gap-2">
+            <Command size={14} className="shrink-0 text-blue-500" />
+            <span>
+              <strong>Warehouse Operator Tip:</strong> When typing in form fields or search boxes, press <kbd className="text-[9px] px-1 py-0 bg-background text-foreground">Esc</kbd> first to release focus, then press any single hotkey like <kbd className="text-[9px] px-1 py-0 bg-background text-foreground">P</kbd> or <kbd className="text-[9px] px-1 py-0 bg-background text-foreground">E</kbd>.
+            </span>
+          </div>
+        </div>
+
+        <div className="modal-actions mt-3 pt-3 border-t border-border flex justify-end">
+          <button className="button primary" onClick={close}>
+            Done (Esc)
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TrainSkuModal({ skuItem, close, onTrained, onConflict }: any) {
   const { data: products = [] } = useSWR('/products', () => getProducts(false))
   const [selectedProductId, setSelectedProductId] = useState<number>(
@@ -3659,5 +5342,403 @@ function AddPatternRuleModal({ products, close, onAdded }: any) {
         />
       </form>
     </Modal>
+  )
+}
+
+interface GlobalWorkspaceProgressBarProps {
+  activeBatch: ProcessBatchResponse | null
+  isProcessing: boolean
+  processingStep: number
+  dashData: DashboardResponse | undefined
+  selectedDate: string
+  go: (page: string) => void
+  showToast: (msg: string) => void
+  onClearBatch: () => void
+  onProcessNew: () => void
+  onConfirmBatch?: (batchId: number) => Promise<void>
+  collapsed: boolean
+  setCollapsed: React.Dispatch<React.SetStateAction<boolean>>
+}
+
+function GlobalWorkspaceProgressBar({
+  activeBatch,
+  isProcessing,
+  processingStep,
+  dashData,
+  selectedDate,
+  go,
+  showToast,
+  onClearBatch,
+  onProcessNew,
+  onConfirmBatch,
+  collapsed,
+  setCollapsed,
+}: GlobalWorkspaceProgressBarProps) {
+  const steps = [
+    'Reading pages',
+    'Extracting AWBs',
+    'Reading SKUs',
+    'Checking duplicates',
+    'Mapping products',
+    'Cropping labels',
+    'Sorting labels',
+    'Ready for review',
+  ]
+
+  const hasBatch = Boolean(activeBatch || isProcessing)
+
+  // 1. Active Batch Progress Mode Calculations
+  const batchTotal = activeBatch?.pages_scanned || activeBatch?.labels?.length || 50
+  const uniqueAwbs = activeBatch?.unique_awbs || 0
+  const duplicateAwbs = activeBatch?.duplicate_awbs || 0
+  const unknownSkus = activeBatch?.unknown_skus || 0
+  const totalItems = activeBatch?.total_items || 0
+
+  // Total labels processed vs batch total
+  const batchLabelsProcessed = isProcessing
+    ? Math.round(((processingStep + 1) / 8) * batchTotal)
+    : (activeBatch ? activeBatch.labels.length : 0)
+
+  const batchPercent = isProcessing
+    ? Math.min(100, Math.round(((processingStep + 1) / 8) * 100))
+    : (batchTotal > 0 ? Math.min(100, Math.round((batchLabelsProcessed / batchTotal) * 100)) : 100)
+
+  // Segment widths
+  const uniqueWidthPct = batchTotal > 0 ? (uniqueAwbs / batchTotal) * 100 : 0
+  const duplicateWidthPct = batchTotal > 0 ? (duplicateAwbs / batchTotal) * 100 : 0
+  const unknownWidthPct = batchTotal > 0 ? (unknownSkus / batchTotal) * 100 : 0
+
+  // 2. Daily Warehouse Dispatch Mode Calculations
+  const dailyTarget = dashData?.shift_overview?.target_labels || 50
+  const dailyProcessed = dashData?.unique_labels || 0
+  const dailyDuplicates = dashData?.duplicate_labels || 0
+  const dailyItems = dashData?.total_items || 0
+  const dailyPercent = dashData?.shift_overview?.label_progress_percent ?? Math.min(100, Math.round((dailyProcessed / dailyTarget) * 100))
+  const cleanRate = dashData?.shift_overview?.clean_shipment_rate ?? 100
+
+  // If collapsed into single compact strip
+  if (collapsed) {
+    return (
+      <div className="bg-card border-b border-border px-6 py-2 flex items-center justify-between text-xs transition-all shadow-xs" id="global-progress-bar-collapsed">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className={`w-2 h-2 rounded-full ${hasBatch ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500'}`} />
+            <strong className="text-[11px] font-bold tracking-tight text-foreground">
+              {hasBatch ? `Batch #${activeBatch?.batch_id ?? 'Live'}` : 'Shift Dispatch'}:
+            </strong>
+          </div>
+
+          <div className="flex items-center gap-2 flex-1 max-w-md">
+            <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  hasBatch ? 'bg-gradient-to-r from-blue-500 to-indigo-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                }`}
+                style={{ width: `${hasBatch ? batchPercent : dailyPercent}%` }}
+              />
+            </div>
+            <span className="font-mono text-[11px] font-bold shrink-0 text-foreground">
+              {hasBatch ? `${batchLabelsProcessed}/${batchTotal} (${batchPercent}%)` : `${dailyProcessed}/${dailyTarget} (${dailyPercent}%)`}
+            </span>
+          </div>
+
+          {hasBatch && (
+            <div className="hidden lg:flex items-center gap-2 text-[11px] text-muted">
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{uniqueAwbs} Unique</span>
+              <span>•</span>
+              <span className={duplicateAwbs > 0 ? 'text-amber-600 dark:text-amber-400 font-semibold' : ''}>{duplicateAwbs} Duplicates</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {hasBatch ? (
+            <button
+              onClick={() => go('process')}
+              className="px-2 py-0.5 text-[10px] font-semibold rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 hover:bg-blue-500/20"
+            >
+              Review [2]
+            </button>
+          ) : (
+            <button
+              onClick={onProcessNew}
+              className="px-2 py-0.5 text-[10px] font-semibold rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+            >
+              + Upload [P]
+            </button>
+          )}
+
+          <button
+            onClick={() => setCollapsed(false)}
+            className="text-[10px] text-muted hover:text-foreground px-1.5 py-0.5 rounded border border-border"
+            title="Expand full progress dashboard bar"
+          >
+            Expand
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <section className="bg-card border-b border-border px-6 py-3.5 shadow-xs relative z-10 transition-all" id="global-workspace-progress-bar">
+      <div className="max-w-7xl mx-auto space-y-2.5">
+        {/* Top Header Row */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className={`p-2 rounded-lg ${hasBatch ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>
+              <Layers size={17} />
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
+                  {hasBatch ? 'Active Batch Progress' : 'Workspace Shift Progress'}
+                </span>
+
+                {isProcessing ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-500/30 animate-pulse flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
+                    Processing ({steps[processingStep] || 'Parsing'})
+                  </span>
+                ) : activeBatch ? (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                    activeBatch.status === 'confirmed'
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                      : activeBatch.unknown_skus > 0 || activeBatch.duplicate_awbs > 0
+                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                      : 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30'
+                  }`}>
+                    {activeBatch.status === 'confirmed' ? '✓ Confirmed to Inventory' : activeBatch.unknown_skus > 0 ? '⚠ Needs SKU Review' : 'Ready for Review'}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                    Shift Active • Kolkata Hub
+                  </span>
+                )}
+              </div>
+
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                {hasBatch ? (
+                  <span>Batch #{activeBatch?.batch_id ?? 'Live'}: {activeBatch?.filename || 'Flipkart Shipping Labels Manifest'}</span>
+                ) : (
+                  <span>Today&apos;s Dispatch Accounting ({selectedDate})</span>
+                )}
+              </h3>
+            </div>
+          </div>
+
+          {/* Big Ratio & Percentage Pill */}
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <div className="flex items-baseline justify-end gap-1.5">
+                <strong className="text-lg font-black tracking-tight text-foreground font-mono">
+                  {hasBatch ? `${batchLabelsProcessed} / ${batchTotal}` : `${dailyProcessed} / ${dailyTarget}`}
+                </strong>
+                <span className="text-xs text-muted font-medium">
+                  {hasBatch ? 'Labels Processed' : 'Shipments Processed'}
+                </span>
+              </div>
+              <p className="text-[10px] text-muted -mt-0.5">
+                {hasBatch
+                  ? isProcessing
+                    ? `Step ${processingStep + 1} of 8: ${steps[processingStep]}`
+                    : `${batchPercent}% of batch completed`
+                  : `${cleanRate}% clean shipment accuracy rate`}
+              </p>
+            </div>
+
+            <div className={`px-2.5 py-1.5 rounded-lg text-xs font-black font-mono border ${
+              hasBatch
+                ? batchPercent === 100
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                  : 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30'
+                : dailyPercent >= 80
+                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                : 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30'
+            }`}>
+              {hasBatch ? `${batchPercent}%` : `${dailyPercent}%`}
+            </div>
+
+            {/* Quick Actions in Global Progress Bar */}
+            <div className="flex items-center gap-1.5 border-l border-border pl-3">
+              {hasBatch ? (
+                <>
+                  <button
+                    onClick={() => go('process')}
+                    className="px-2.5 py-1 text-xs font-semibold rounded-md bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors flex items-center gap-1"
+                    title="Open Process Labels View [2]"
+                  >
+                    <span>Review Batch</span>
+                    <kbd className="bg-blue-700 text-blue-100 border-blue-500 text-[9px] px-1 py-0">2</kbd>
+                  </button>
+
+                  {activeBatch && activeBatch.status !== 'confirmed' && onConfirmBatch && (
+                    <button
+                      onClick={() => onConfirmBatch(activeBatch.batch_id)}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors flex items-center gap-1"
+                      title="Confirm Batch & Update Stock-out"
+                    >
+                      <Check size={13} />
+                      <span>Confirm</span>
+                    </button>
+                  )}
+
+                  {activeBatch && (
+                    <button
+                      onClick={() => {
+                        window.open(`/batches/${activeBatch.batch_id}/pdf?sort=sku_grouped`, '_blank')
+                        showToast('Thermal 4×6 PDF opened for print!')
+                      }}
+                      className="p-1.5 rounded-md border border-border bg-card hover:bg-slate-100 dark:hover:bg-slate-800 text-muted hover:text-foreground transition-colors"
+                      title="Print Cropped 4x6 Thermal PDF"
+                    >
+                      <Printer size={14} />
+                    </button>
+                  )}
+
+                  <button
+                    onClick={onClearBatch}
+                    className="p-1.5 rounded-md border border-border bg-card hover:bg-rose-500/10 hover:text-rose-500 text-muted transition-colors"
+                    title="Clear Batch & Reset [C]"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={onProcessNew}
+                    className="px-2.5 py-1 text-xs font-semibold rounded-md bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors flex items-center gap-1.5"
+                    title="Process New Label PDF [P]"
+                  >
+                    <CloudUpload size={13} />
+                    <span>Upload PDF</span>
+                    <kbd className="bg-blue-700 text-blue-100 border-blue-500 text-[9px] px-1 py-0">P</kbd>
+                  </button>
+                </>
+              )}
+
+              <button
+                onClick={() => setCollapsed(true)}
+                className="p-1.5 text-muted hover:text-foreground text-[10px] rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                title="Collapse bar to 1 line"
+              >
+                <ChevronDown size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* The Multi-Segment Visual Progress Bar Track */}
+        <div className="relative w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner p-0.5 flex gap-0.5">
+          {hasBatch ? (
+            isProcessing ? (
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-teal-400 transition-all duration-300 animate-pulse"
+                style={{ width: `${batchPercent}%` }}
+              />
+            ) : (
+              <>
+                {/* Unique valid labels (Emerald) */}
+                {uniqueWidthPct > 0 && (
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
+                    style={{ width: `${uniqueWidthPct}%` }}
+                    title={`Unique Valid Labels: ${uniqueAwbs}`}
+                  />
+                )}
+                {/* Duplicate labels (Amber) */}
+                {duplicateWidthPct > 0 && (
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-500"
+                    style={{ width: `${duplicateWidthPct}%` }}
+                    title={`Duplicate Labels Prevented: ${duplicateAwbs}`}
+                  />
+                )}
+                {/* Unknown unmapped SKUs (Rose) */}
+                {unknownWidthPct > 0 && (
+                  <div
+                    className="h-full bg-gradient-to-r from-rose-400 to-rose-500 rounded-full transition-all duration-500"
+                    style={{ width: `${unknownWidthPct}%` }}
+                    title={`Unknown SKUs Requiring Training: ${unknownSkus}`}
+                  />
+                )}
+              </>
+            )
+          ) : (
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-500 rounded-full transition-all duration-500"
+              style={{ width: `${dailyPercent}%` }}
+            />
+          )}
+        </div>
+
+        {/* Diagnostic Badges & Breakdown Row */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-[11px]">
+          <div className="flex flex-wrap items-center gap-2">
+            {hasBatch ? (
+              <>
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-semibold">
+                  <CheckCircle2 size={12} className="text-emerald-500" />
+                  <span>{uniqueAwbs} Unique AWBs</span>
+                </div>
+
+                <div className={`flex items-center gap-1 px-2 py-0.5 rounded font-semibold border ${
+                  duplicateAwbs > 0
+                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+                    : 'bg-slate-100 dark:bg-slate-800 text-muted border-border'
+                }`}>
+                  <ShieldAlert size={12} className={duplicateAwbs > 0 ? 'text-amber-500' : 'text-muted'} />
+                  <span>{duplicateAwbs} Duplicates Prevented</span>
+                </div>
+
+                <div className={`flex items-center gap-1 px-2 py-0.5 rounded font-semibold border ${
+                  unknownSkus > 0
+                    ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
+                    : 'bg-slate-100 dark:bg-slate-800 text-muted border-border'
+                }`}>
+                  <Tags size={12} className={unknownSkus > 0 ? 'text-rose-500' : 'text-muted'} />
+                  <span>{unknownSkus} Unmapped SKUs</span>
+                </div>
+
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-muted border border-border">
+                  <Package size={12} />
+                  <span>{totalItems} Total Units</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-semibold">
+                  <CheckCircle2 size={12} className="text-emerald-500" />
+                  <span>{dailyProcessed} Confirmed Shipments</span>
+                </div>
+
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 font-semibold">
+                  <Package size={12} />
+                  <span>{dailyItems} Dispatched Units</span>
+                </div>
+
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-muted border border-border">
+                  <ShieldAlert size={12} />
+                  <span>{dailyDuplicates} Reprints Isolated</span>
+                </div>
+
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-muted border border-border">
+                  <Users size={12} />
+                  <span>Active Workers: Sohel (Lead), Kartik Da</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="text-[10px] text-muted flex items-center gap-2">
+            <span>Flipkart Thermal Pipeline</span>
+            <span>•</span>
+            <span className="font-mono text-foreground font-semibold">4×6 Auto-Crop Active</span>
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }

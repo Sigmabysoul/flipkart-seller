@@ -1,16 +1,27 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || ""
+// Always use relative routes in browser if NEXT_PUBLIC_API_URL is undefined or localhost
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || ""
+const API_URL = typeof window !== 'undefined' && rawApiUrl.includes('localhost') ? "" : rawApiUrl
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      ...(options?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-      ...options?.headers,
-    },
-  })
-  const data = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(data?.detail || `API request failed (${response.status})`)
-  return data as T
+  const url = `${API_URL}${path}`
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...(options?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+        ...options?.headers,
+      },
+    })
+    const data = await response.json().catch(() => null)
+    if (!response.ok) {
+      const errMsg = data?.detail || data?.error || data?.message || `API request failed with status ${response.status}`
+      throw new Error(errMsg)
+    }
+    return data as T
+  } catch (err: any) {
+    console.warn(`[API] fetch to ${path} failed:`, err?.message || err)
+    throw err
+  }
 }
 
 export type ApiProduct = {
@@ -101,6 +112,23 @@ export type DashboardResponse = {
   mixed_progress?: WorkerDailyProgress
   category_progress?: CategoryDailyProgress[]
   shift_overview?: ShiftOverview
+  garbage_bag_total_labels?: number
+  garbage_bag_total_units?: number
+  kartik_station?: {
+    total_labels: number
+    total_items: number
+    products: { name: string; internal_code: string; labels: number; items: number; category: string }[]
+    packcalc_boxes: { id: string; brand: string; bag_type: string; label: string; count: number; color: string; unit: string; description: string }[]
+    garbage_bag_total_labels: number
+    garbage_bag_total_units: number
+    shipments: any[]
+  }
+  my_station?: {
+    total_labels: number
+    total_items: number
+    orders: { name: string; internal_code: string; labels: number; items: number; category: string }[]
+    shipments: any[]
+  }
   product_stock_out: { name: string; quantity: number; category: string; worker: string }[]
   raw_material_requirements: Record<string, { "3-Bag": number; "2-Bag": number }>
   increments: {

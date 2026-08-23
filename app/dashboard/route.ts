@@ -33,18 +33,15 @@ function getSnapshot(targetDate: string) {
     }
   }
 
-  // Generate structured worker_progress array
+  // Generate structured worker_progress array without arbitrary quotas
   const workerProgress = store.workers.map((w) => {
     const stats = workerMap[w.name] || { unique_labels: 0, items: 0, products: {} };
-    const quota = 50; // Daily worker item quota
-    const progressPercent = Math.min(100, Math.round((stats.items / quota) * 100));
-    const labelProgressPercent = Math.min(100, Math.round((stats.unique_labels / 30) * 100));
     const shareOfTotal = totalItemsCount > 0 ? Number(((stats.items / totalItemsCount) * 100).toFixed(1)) : 0;
     const itemsPerLabel = stats.unique_labels > 0 ? Number((stats.items / stats.unique_labels).toFixed(2)) : 0;
     const topProducts = Object.entries(stats.products)
       .map(([name, qty]) => ({ name, quantity: qty }))
       .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 3);
+      .slice(0, 4);
 
     return {
       id: w.id,
@@ -53,9 +50,6 @@ function getSnapshot(targetDate: string) {
       status: w.active ? "On shift" : "Offline",
       unique_labels: stats.unique_labels,
       items: stats.items,
-      target_quota: quota,
-      progress_percent: progressPercent,
-      label_progress_percent: labelProgressPercent,
       share_of_total: shareOfTotal,
       items_per_label: itemsPerLabel,
       top_products: topProducts,
@@ -166,17 +160,153 @@ function getSnapshot(targetDate: string) {
     Plain: { "3-Bag": 0, "2-Bag": 0 },
   };
 
-  for (const item of items) {
-    if (item.product_id) {
-      const prod = store.products.find((p) => p.id === item.product_id);
-      const recipe = store.packingRecipes.find((r) => r.product_id === item.product_id);
-      const family = prod?.bag_family || recipe?.bag_family;
+  let totalGarbageBagLabels = 0;
+  let totalGarbageBagUnits = 0;
 
-      if (family && raw[family]) {
-        const recipeConfig = recipe || { raw_3bag_qty: prod?.raw_3bag_qty, raw_2bag_qty: prod?.raw_2bag_qty };
-        const allocation = calculatePackMaterials(family, item.quantity, recipeConfig);
-        raw[family]["3-Bag"] += allocation["3-Bag"];
-        raw[family]["2-Bag"] += allocation["2-Bag"];
+  for (const s of shipments) {
+    let hasGarbageBag = false;
+    for (const item of s.items) {
+      if (item.product_id) {
+        const prod = store.products.find((p) => p.id === item.product_id);
+        const recipe = store.packingRecipes.find((r) => r.product_id === item.product_id);
+        const family = prod?.bag_family || recipe?.bag_family;
+
+        if (family && raw[family]) {
+          hasGarbageBag = true;
+          totalGarbageBagUnits += item.quantity;
+          const recipeConfig = recipe || { raw_3bag_qty: prod?.raw_3bag_qty, raw_2bag_qty: prod?.raw_2bag_qty };
+          const allocation = calculatePackMaterials(family, item.quantity, recipeConfig);
+          raw[family]["3-Bag"] += allocation["3-Bag"];
+          raw[family]["2-Bag"] += allocation["2-Bag"];
+        }
+      }
+    }
+    if (hasGarbageBag) {
+      totalGarbageBagLabels += 1;
+    }
+  }
+
+  // Segmented Station Data: Kartik Da's Station vs My Station (Sohel)
+  // Kartik Da has strictly 4 types of products:
+  // 1. Garbage Bag Standard Packs
+  // 2. Garbage Bag Rolls (17x19 and 19x21)
+  // 3. Butter Paper
+  // 4. Aluminium Container
+  const kartikShipments = shipments.filter((s) =>
+    s.items.some((it) => (it.assigned_worker === "Kartik Da" || (!it.assigned_worker && s.items[0]?.assigned_worker === "Kartik Da")))
+  );
+
+  const kartikProductsMap: Record<string, { name: string; internal_code: string; labels: number; items: number; category: string }> = {};
+  for (const s of kartikShipments) {
+    for (const it of s.items) {
+      const isKartik = it.assigned_worker === "Kartik Da" || (!it.assigned_worker && s.items[0]?.assigned_worker === "Kartik Da");
+      if (isKartik) {
+        const prodName = it.product || it.raw_sku;
+        const prod = store.products.find((p) => p.id === it.product_id || p.name === prodName);
+        const code = prod?.internal_code || it.raw_sku;
+        if (!kartikProductsMap[prodName]) {
+          kartikProductsMap[prodName] = {
+            name: prodName,
+            internal_code: code,
+            labels: 0,
+            items: 0,
+            category: prod?.category || "Kartik Station",
+          };
+        }
+        kartikProductsMap[prodName].labels += 1;
+        kartikProductsMap[prodName].items += it.quantity;
+      }
+    }
+  }
+
+  // 6 Boxes for PackCalc (PalCalc) on Kartik Da's page
+  const packcalcBoxes = [
+    {
+      id: "averx-2bag",
+      brand: "Averx",
+      bag_type: "2-Bag",
+      label: "Averx 2-Bag",
+      count: raw.Averx["2-Bag"],
+      color: "amber",
+      unit: "Bags",
+      description: "Remainder roll cycles (<3 packs)",
+    },
+    {
+      id: "averx-3bag",
+      brand: "Averx",
+      bag_type: "3-Bag",
+      label: "Averx 3-Bag",
+      count: raw.Averx["3-Bag"],
+      color: "amber",
+      unit: "Bags",
+      description: "Full 14-roll cycle packs",
+    },
+    {
+      id: "star-2bag",
+      brand: "Star",
+      bag_type: "2-Bag",
+      label: "Star 2-Bag",
+      count: raw.Star["2-Bag"],
+      color: "blue",
+      unit: "Bags",
+      description: "Star 2-bag allowance",
+    },
+    {
+      id: "star-3bag",
+      brand: "Star",
+      bag_type: "3-Bag",
+      label: "Star 3-Bag",
+      count: raw.Star["3-Bag"],
+      color: "blue",
+      unit: "Bags",
+      description: "4 bags per roll allocation",
+    },
+    {
+      id: "plain-2bag",
+      brand: "Plain",
+      bag_type: "2-Bag",
+      label: "Plain 2-Bag",
+      count: raw.Plain["2-Bag"],
+      color: "slate",
+      unit: "Bags",
+      description: "1 bag per standard unit",
+    },
+    {
+      id: "plain-3bag",
+      brand: "Plain",
+      bag_type: "3-Bag",
+      label: "Plain 3-Bag",
+      count: raw.Plain["3-Bag"],
+      color: "slate",
+      unit: "Bags",
+      description: "2 bags per standard unit",
+    },
+  ];
+
+  // My Station (Sohel): All other products (R1, R1S, R16S, R1L, SE-3B, AX6, AX-10B, Ring Flash, Mic, Clip, Wallet, Case, etc.)
+  const myShipments = shipments.filter((s) =>
+    s.items.some((it) => (it.assigned_worker === "Sohel" || (!it.assigned_worker && s.items[0]?.assigned_worker !== "Kartik Da")))
+  );
+
+  const myProductsMap: Record<string, { name: string; internal_code: string; labels: number; items: number; category: string }> = {};
+  for (const s of myShipments) {
+    for (const it of s.items) {
+      const isMyItem = it.assigned_worker === "Sohel" || (!it.assigned_worker && s.items[0]?.assigned_worker !== "Kartik Da");
+      if (isMyItem) {
+        const prodName = it.product || it.raw_sku;
+        const prod = store.products.find((p) => p.id === it.product_id || p.name === prodName);
+        const code = prod?.internal_code || it.raw_sku;
+        if (!myProductsMap[prodName]) {
+          myProductsMap[prodName] = {
+            name: prodName,
+            internal_code: code,
+            labels: 0,
+            items: 0,
+            category: prod?.category || "My Station",
+          };
+        }
+        myProductsMap[prodName].labels += 1;
+        myProductsMap[prodName].items += it.quantity;
       }
     }
   }
@@ -199,6 +329,23 @@ function getSnapshot(targetDate: string) {
     category_progress: categoryProgress,
     product_stock_out: Object.values(productTotals).sort((a, b) => b.quantity - a.quantity),
     raw_material_requirements: raw,
+    garbage_bag_total_labels: totalGarbageBagLabels,
+    garbage_bag_total_units: totalGarbageBagUnits,
+    kartik_station: {
+      total_labels: kartikShipments.length,
+      total_items: Object.values(kartikProductsMap).reduce((s, p) => s + p.items, 0),
+      products: Object.values(kartikProductsMap).sort((a, b) => b.labels - a.labels),
+      packcalc_boxes: packcalcBoxes,
+      garbage_bag_total_labels: totalGarbageBagLabels,
+      garbage_bag_total_units: totalGarbageBagUnits,
+      shipments: kartikShipments,
+    },
+    my_station: {
+      total_labels: myShipments.length,
+      total_items: Object.values(myProductsMap).reduce((s, p) => s + p.items, 0),
+      orders: Object.values(myProductsMap).sort((a, b) => b.labels - a.labels),
+      shipments: myShipments,
+    },
     shift_overview: {
       target_labels: totalCapacityLabels,
       target_items: totalCapacityItems,
