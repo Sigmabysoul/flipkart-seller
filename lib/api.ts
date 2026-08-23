@@ -348,9 +348,25 @@ export const getCategories = () => apiFetch<ApiCategory[]>("/categories")
 export const createCategory = (payload: { name: string; description?: string }) => apiFetch<ApiCategory>("/categories", { method: "POST", body: JSON.stringify(payload) })
 export const deleteCategory = (id: number) => apiFetch<{ status: string }>(`/categories/${id}`, { method: "DELETE" })
 
+export type ApiSkuMapping = {
+  id: number
+  raw_sku: string
+  product_id: number
+  product_name: string
+  category: string
+  assigned_worker: string
+  worker_override?: string | null
+  match_type: string
+  times_seen: number
+  first_seen_at: string
+  last_seen_at: string
+}
+
 // Training APIs
 export const getTrainingStats = () => apiFetch<TrainingStats>("/training/stats")
 export const getUnknownSkus = () => apiFetch<UnknownSkuItem[]>("/training/unknown")
+export const getSkuMappings = () => apiFetch<ApiSkuMapping[]>("/training/mappings")
+export const deleteSkuMapping = (id: number) => apiFetch<{ status: string; message: string }>(`/training/mappings?id=${id}`, { method: "DELETE" })
 export const mapSku = (payload: {
   raw_sku: string
   product_id: number
@@ -404,3 +420,18 @@ export const getHistory = (range = "today", startDate?: string, endDate?: string
   apiFetch<any>(`/history?range=${range}${startDate ? `&start_date=${startDate}` : ""}${endDate ? `&end_date=${endDate}` : ""}`)
 export const searchShipments = (q: string) =>
   apiFetch<any[]>(`/shipments/search?q=${encodeURIComponent(q)}`)
+
+// Database Management APIs
+export const clearOldLabelData = () =>
+  apiFetch<{ status: string; message: string; result: any }>("/database/clear-labels", { method: "POST" })
+export const resetDatabaseToDefault = () =>
+  apiFetch<{ status: string; message: string; result: any }>("/database/reset", { method: "POST" })
+export const syncDatabaseWithDisk = () =>
+  apiFetch<{ status: string; message: string; result: any }>("/database/sync", { method: "POST" })
+export const getDatabaseStats = () =>
+  apiFetch<any>("/database/sync", { method: "GET" })
+export const getFullDatabaseExport = () =>
+  apiFetch<any>("/database", { method: "GET" })
+export const importDatabaseData = (data: any) =>
+  apiFetch<any>("/database", { method: "POST", body: JSON.stringify(data) })
+
