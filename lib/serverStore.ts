@@ -131,11 +131,13 @@ export interface BatchItem {
   status: 'draft' | 'needs_review' | 'confirmed' | 'cancelled';
   raw_json?: string | null;
   labels?: ParsedLabel[];
+  source_pdfs_base64?: string[];
 }
 
 export interface ParsedLabel {
   page: number;
   original_page?: number;
+  source_document?: number;
   sequence?: number;
   group_page?: number;
   group_total?: number;

@@ -527,7 +527,7 @@ function resolveAndSortLabels(
 }
 
 // Helper to extract real text and extract Flipkart shipping label fields
-async function extractLabelsFromPdfBuffer(pdfBuffer: Buffer): Promise<ParsedLabel[]> {
+async function extractLabelsFromPdfBuffer(pdfBuffer: Buffer, sourceDocument: number): Promise<ParsedLabel[]> {
   try {
     const fullText = await parsePdfText(pdfBuffer);
     if (!fullText.trim()) return [];
@@ -553,6 +553,7 @@ async function extractLabelsFromPdfBuffer(pdfBuffer: Buffer): Promise<ParsedLabe
       extracted.push({
         page: pageNum,
         original_page: pageNum,
+        source_document: sourceDocument,
         awb: String(awb),
         order_id: String(orderId),
         duplicate: false,
@@ -592,19 +593,21 @@ export async function POST(req: Request) {
     }
 
     const filenames = files.map((f) => f.name);
+    const sourcePdfsBase64: string[] = [];
     let totalPdfPages = 0;
     const realExtractedLabels: ParsedLabel[] = [];
 
     // Inspect real PDF files if valid binary
-    for (const file of files) {
+    for (const [fileIndex, file] of files.entries()) {
       try {
         const arrayBuffer = await file.arrayBuffer();
         if (arrayBuffer.byteLength > 0) {
           const buffer = Buffer.from(arrayBuffer);
+          sourcePdfsBase64.push(buffer.toString("base64"));
           const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
           totalPdfPages += doc.getPageCount();
 
-          const parsed = await extractLabelsFromPdfBuffer(buffer);
+          const parsed = await extractLabelsFromPdfBuffer(buffer, fileIndex);
           if (parsed.length > 0) {
             realExtractedLabels.push(...parsed);
           }
@@ -641,6 +644,7 @@ export async function POST(req: Request) {
       status: (unknownCount > 0 || dupesCount > 0 ? "needs_review" : "draft") as any,
       raw_json: JSON.stringify(parsedLabels),
       labels: parsedLabels,
+      source_pdfs_base64: sourcePdfsBase64,
     };
 
     store.batches.unshift(newBatch);
