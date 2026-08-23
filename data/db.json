@@ -1,0 +1,731 @@
+{
+  "workers": [
+    {
+      "id": 1,
+      "name": "Sohel",
+      "active": true,
+      "phone": "+91 9876543210",
+      "created_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 2,
+      "name": "Kartik Da",
+      "active": true,
+      "phone": "+91 9876543211",
+      "created_at": "2026-08-23T14:33:36.522Z"
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "Selfie Stick & Tripod",
+      "description": "Camera & phone tripods and selfie sticks"
+    },
+    {
+      "id": 2,
+      "name": "Garbage Bag",
+      "description": "Garbage bags and rolls (17x19 & 19x21)"
+    },
+    {
+      "id": 3,
+      "name": "Butter Paper & Container",
+      "description": "Butter paper rolls and aluminium containers"
+    },
+    {
+      "id": 4,
+      "name": "Electronics & Audio",
+      "description": "Microphones, ring lights & wireless audio"
+    },
+    {
+      "id": 5,
+      "name": "Accessories & Wallets",
+      "description": "Clips, leather wallets & case covers"
+    },
+    {
+      "id": 8,
+      "name": "Cables",
+      "description": ""
+    },
+    {
+      "id": 9,
+      "name": "R16S",
+      "description": ""
+    }
+  ],
+  "products": [
+    {
+      "id": 10,
+      "name": "Butter Paper",
+      "internal_code": "BP-ROLL",
+      "category": "Butter Paper & Container",
+      "assigned_worker": "Kartik Da",
+      "sort_group": "Packaging",
+      "sort_order": 10,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 18,
+      "name": "R1SL",
+      "internal_code": "R1SL-B-1",
+      "category": "Tripod",
+      "assigned_worker": "Sohel",
+      "sort_group": null,
+      "sort_order": 10,
+      "active": true,
+      "notes": null,
+      "bag_family": null,
+      "created_at": "2026-08-23T14:57:55.897Z",
+      "updated_at": "2026-08-23T14:57:55.897Z"
+    },
+    {
+      "id": 11,
+      "name": "Aluminium Container",
+      "internal_code": "ALU-CONT",
+      "category": "Butter Paper & Container",
+      "assigned_worker": "Kartik Da",
+      "sort_group": "Packaging",
+      "sort_order": 20,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 12,
+      "name": "Garbage Bag Roll 17x19",
+      "internal_code": "GB-ROLL-17X19",
+      "category": "Garbage Bag",
+      "assigned_worker": "Kartik Da",
+      "sort_group": "Garbage Bags",
+      "sort_order": 30,
+      "active": true,
+      "bag_family": "Star",
+      "raw_3bag_qty": 4,
+      "raw_2bag_qty": 0,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 13,
+      "name": "Garbage Bag Roll 19x21",
+      "internal_code": "GB-ROLL-19X21",
+      "category": "Garbage Bag",
+      "assigned_worker": "Kartik Da",
+      "sort_group": "Garbage Bags",
+      "sort_order": 40,
+      "active": true,
+      "bag_family": "Averx",
+      "raw_3bag_qty": 0,
+      "raw_2bag_qty": 8,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 14,
+      "name": "Garbage Bag Standard Pack",
+      "internal_code": "GB-STD-PACK",
+      "category": "Garbage Bag",
+      "assigned_worker": "Kartik Da",
+      "sort_group": "Garbage Bags",
+      "sort_order": 50,
+      "active": true,
+      "bag_family": "Plain",
+      "raw_3bag_qty": 2,
+      "raw_2bag_qty": 1,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 1,
+      "name": "R1",
+      "internal_code": "R1",
+      "category": "Selfie Stick & Tripod",
+      "assigned_worker": "Sohel",
+      "sort_group": "Tripods",
+      "sort_order": 100,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 2,
+      "name": "R1S",
+      "internal_code": "R1S",
+      "category": "Selfie Stick & Tripod",
+      "assigned_worker": "Sohel",
+      "sort_group": "Tripods",
+      "sort_order": 110,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 3,
+      "name": "R16S",
+      "internal_code": "R16S",
+      "category": "Selfie Stick & Tripod",
+      "assigned_worker": "Sohel",
+      "sort_group": "Tripods",
+      "sort_order": 120,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 4,
+      "name": "R1L",
+      "internal_code": "R1L",
+      "category": "Selfie Stick & Tripod",
+      "assigned_worker": "Sohel",
+      "sort_group": "Tripods",
+      "sort_order": 130,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 5,
+      "name": "SE-3B",
+      "internal_code": "SE-3B",
+      "category": "Selfie Stick & Tripod",
+      "assigned_worker": "Sohel",
+      "sort_group": "Tripods",
+      "sort_order": 140,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 6,
+      "name": "AX6",
+      "internal_code": "AX6",
+      "category": "Electronics & Audio",
+      "assigned_worker": "Sohel",
+      "sort_group": "Audio",
+      "sort_order": 150,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 7,
+      "name": "AX-10B",
+      "internal_code": "AX-10B",
+      "category": "Electronics & Audio",
+      "assigned_worker": "Sohel",
+      "sort_group": "Audio",
+      "sort_order": 155,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 8,
+      "name": "Ring Flash 10-Inch",
+      "internal_code": "RFL-10I",
+      "category": "Electronics & Audio",
+      "assigned_worker": "Sohel",
+      "sort_group": "Lighting",
+      "sort_order": 160,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 9,
+      "name": "NAFA Clip Microphone",
+      "internal_code": "MIC-3.5MM",
+      "category": "Electronics & Audio",
+      "assigned_worker": "Sohel",
+      "sort_group": "Audio",
+      "sort_order": 170,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 15,
+      "name": "Mobile Holder Clip",
+      "internal_code": "TRIP-CLIP",
+      "category": "Accessories & Wallets",
+      "assigned_worker": "Sohel",
+      "sort_group": "Accessories",
+      "sort_order": 180,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 16,
+      "name": "HideTheory Leather Wallet",
+      "internal_code": "HT-WALLET",
+      "category": "Accessories & Wallets",
+      "assigned_worker": "Sohel",
+      "sort_group": "Wallets",
+      "sort_order": 190,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 17,
+      "name": "AirPods Silicone Case",
+      "internal_code": "EBCC-AAPRO",
+      "category": "Accessories & Wallets",
+      "assigned_worker": "Sohel",
+      "sort_group": "Accessories",
+      "sort_order": 200,
+      "active": true,
+      "created_at": "2026-08-23T14:33:36.522Z",
+      "updated_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 19,
+      "name": "M5 cable",
+      "internal_code": "M5-1",
+      "category": "Cables",
+      "assigned_worker": "Sohel",
+      "sort_group": null,
+      "sort_order": 10,
+      "active": true,
+      "notes": null,
+      "bag_family": null,
+      "created_at": "2026-08-23T15:02:49.821Z",
+      "updated_at": "2026-08-23T15:02:49.821Z"
+    }
+  ],
+  "skuMappings": [
+    {
+      "id": 1,
+      "raw_sku": "BP-ROLL-2026",
+      "product_id": 10,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 14,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 2,
+      "raw_sku": "BUTTERPAPER-100S",
+      "product_id": 10,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 14,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 3,
+      "raw_sku": "ALU-CONT-450ML",
+      "product_id": 11,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 8,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 4,
+      "raw_sku": "ALU-FOIL-750ML",
+      "product_id": 11,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 8,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 5,
+      "raw_sku": "GB-ROLL-17X19-STAR",
+      "product_id": 12,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 12,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 6,
+      "raw_sku": "GB-ROLL-19X21-AVERX",
+      "product_id": 13,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 10,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 7,
+      "raw_sku": "GB-STD-PLAIN-30",
+      "product_id": 14,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 6,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 8,
+      "raw_sku": "7_SEST-NAF2-R1-B-1",
+      "product_id": 1,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 19,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 9,
+      "raw_sku": "7_SEST-NAF4-R1-B-1",
+      "product_id": 1,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 15,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 10,
+      "raw_sku": "7_SEST-NAF2-R1S-B-1",
+      "product_id": 2,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 50,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 11,
+      "raw_sku": "7_SEST-NAF3-R1S-B-1",
+      "product_id": 2,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 12,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 12,
+      "raw_sku": "7_SEST-FKSB1-R16S-B-1",
+      "product_id": 3,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 35,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 13,
+      "raw_sku": "7_SEST-NAF-R1L-B-1",
+      "product_id": 4,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 14,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 14,
+      "raw_sku": "7_SEST-NAF-SE-3B-B-1",
+      "product_id": 5,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 38,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 15,
+      "raw_sku": "SE-3B",
+      "product_id": 5,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 24,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 16,
+      "raw_sku": "AX6-MIC-W-01",
+      "product_id": 6,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 31,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 17,
+      "raw_sku": "AX-10B",
+      "product_id": 7,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 10,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 18,
+      "raw_sku": "7_TRIP-7FT+RFL-10I-BES3-2",
+      "product_id": 8,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 42,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 19,
+      "raw_sku": "7_MIC-NAF-3.5MM-B-1",
+      "product_id": 9,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 28,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 20,
+      "raw_sku": "7_TRIP-CLIP001-NAF-B-1",
+      "product_id": 15,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 16,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 21,
+      "raw_sku": "HT-MLWBR-01",
+      "product_id": 16,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 22,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 22,
+      "raw_sku": "6_EBCC-NAF-AAPRO-NC042",
+      "product_id": 17,
+      "match_type": "exact",
+      "active": true,
+      "times_seen": 7,
+      "first_seen_at": "2026-08-23T14:33:36.522Z",
+      "last_seen_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 23,
+      "raw_sku": "7_TRIP-7FT+RFL-10I-BES3-2-COMBO",
+      "product_id": 8,
+      "match_type": "exact",
+      "worker_override": null,
+      "active": true,
+      "times_seen": 1,
+      "first_seen_at": "2026-08-23T14:56:55.141Z",
+      "last_seen_at": "2026-08-23T14:56:55.141Z"
+    },
+    {
+      "id": 24,
+      "raw_sku": "7_SEST-NAF-R1SL-B-1",
+      "product_id": 18,
+      "match_type": "exact",
+      "worker_override": "Sohel",
+      "active": true,
+      "times_seen": 1,
+      "first_seen_at": "2026-08-23T14:57:56.837Z",
+      "last_seen_at": "2026-08-23T14:57:56.837Z"
+    },
+    {
+      "id": 25,
+      "raw_sku": "9_MIB-USB-NAF-M5-1",
+      "product_id": 19,
+      "match_type": "exact",
+      "worker_override": "Sohel",
+      "active": true,
+      "times_seen": 1,
+      "first_seen_at": "2026-08-23T15:02:50.323Z",
+      "last_seen_at": "2026-08-23T15:02:50.323Z"
+    }
+  ],
+  "packingRecipes": [
+    {
+      "id": 1,
+      "product_id": 12,
+      "bag_family": "Star",
+      "raw_3bag_qty": 4,
+      "raw_2bag_qty": 0
+    },
+    {
+      "id": 2,
+      "product_id": 13,
+      "bag_family": "Averx",
+      "raw_3bag_qty": 0,
+      "raw_2bag_qty": 8
+    },
+    {
+      "id": 3,
+      "product_id": 14,
+      "bag_family": "Plain",
+      "raw_3bag_qty": 2,
+      "raw_2bag_qty": 1
+    }
+  ],
+  "patternRules": [
+    {
+      "id": 1,
+      "rule_type": "starts_with",
+      "value": "GB-",
+      "product_id": null,
+      "suggested_worker": "Kartik Da",
+      "priority": 10,
+      "active": true
+    },
+    {
+      "id": 2,
+      "rule_type": "starts_with",
+      "value": "BP-",
+      "product_id": 10,
+      "suggested_worker": "Kartik Da",
+      "priority": 10,
+      "active": true
+    },
+    {
+      "id": 3,
+      "rule_type": "starts_with",
+      "value": "ALU-",
+      "product_id": 11,
+      "suggested_worker": "Kartik Da",
+      "priority": 10,
+      "active": true
+    },
+    {
+      "id": 4,
+      "rule_type": "contains",
+      "value": "17X19",
+      "product_id": 12,
+      "suggested_worker": "Kartik Da",
+      "priority": 15,
+      "active": true
+    },
+    {
+      "id": 5,
+      "rule_type": "contains",
+      "value": "19X21",
+      "product_id": 13,
+      "suggested_worker": "Kartik Da",
+      "priority": 15,
+      "active": true
+    },
+    {
+      "id": 6,
+      "rule_type": "contains",
+      "value": "R16S",
+      "product_id": 3,
+      "suggested_worker": "Sohel",
+      "priority": 20,
+      "active": true
+    },
+    {
+      "id": 7,
+      "rule_type": "contains",
+      "value": "R1S",
+      "product_id": 2,
+      "suggested_worker": "Sohel",
+      "priority": 20,
+      "active": true
+    },
+    {
+      "id": 8,
+      "rule_type": "contains",
+      "value": "SE-3B",
+      "product_id": 5,
+      "suggested_worker": "Sohel",
+      "priority": 20,
+      "active": true
+    },
+    {
+      "id": 9,
+      "rule_type": "contains",
+      "value": "AX-10B",
+      "product_id": 7,
+      "suggested_worker": "Sohel",
+      "priority": 20,
+      "active": true
+    }
+  ],
+  "trainingHistory": [
+    {
+      "id": 6,
+      "raw_sku": "9_MIB-USB-NAF-M5-1",
+      "old_product_name": null,
+      "new_product_name": "M5 cable",
+      "new_worker": "Sohel",
+      "action": "Created Mapping",
+      "created_at": "2026-08-23T15:02:50.323Z"
+    },
+    {
+      "id": 5,
+      "raw_sku": "7_SEST-NAF-R1SL-B-1",
+      "old_product_name": null,
+      "new_product_name": "R1SL",
+      "new_worker": "Sohel",
+      "action": "Created Mapping",
+      "created_at": "2026-08-23T14:57:56.837Z"
+    },
+    {
+      "id": 4,
+      "raw_sku": "7_TRIP-7FT+RFL-10I-BES3-2-COMBO",
+      "old_product_name": null,
+      "new_product_name": "Ring Flash 10-Inch",
+      "new_worker": "Sohel",
+      "action": "Created Mapping",
+      "created_at": "2026-08-23T14:56:55.141Z"
+    },
+    {
+      "id": 1,
+      "raw_sku": "7_TRIP-7FT+RFL-10I-CHI-2",
+      "old_product_name": null,
+      "new_product_name": "Ring Flash 10-Inch",
+      "new_worker": "Sohel",
+      "action": "Created Mapping",
+      "created_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 2,
+      "raw_sku": "HT-MLWBR-01",
+      "old_product_name": null,
+      "new_product_name": "HideTheory Leather Wallet",
+      "new_worker": "Sohel",
+      "action": "Created Mapping",
+      "created_at": "2026-08-23T14:33:36.522Z"
+    },
+    {
+      "id": 3,
+      "raw_sku": "7_SEST-FKSB1-R16S-B-1",
+      "old_product_name": null,
+      "new_product_name": "R16S",
+      "new_worker": "Sohel",
+      "action": "Created Mapping",
+      "created_at": "2026-08-23T14:33:36.522Z"
+    }
+  ],
+  "printEvents": [],
+  "batches": [],
+  "shipments": [],
+  "nextId": {
+    "worker": 3,
+    "category": 10,
+    "product": 20,
+    "mapping": 26,
+    "recipe": 4,
+    "rule": 10,
+    "history": 7,
+    "print": 1,
+    "batch": 1,
+    "shipment": 1,
+    "item": 1
+  }
+}

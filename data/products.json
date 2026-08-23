@@ -7,7 +7,23 @@
     "assigned_worker": "Kartik Da",
     "sort_group": "Packaging",
     "sort_order": 10,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
+  },
+  {
+    "id": 18,
+    "name": "R1SL",
+    "internal_code": "R1SL-B-1",
+    "category": "Tripod",
+    "assigned_worker": "Sohel",
+    "sort_group": null,
+    "sort_order": 10,
+    "active": true,
+    "notes": null,
+    "bag_family": null,
+    "created_at": "2026-08-23T14:57:55.897Z",
+    "updated_at": "2026-08-23T14:57:55.897Z"
   },
   {
     "id": 11,
@@ -17,7 +33,9 @@
     "assigned_worker": "Kartik Da",
     "sort_group": "Packaging",
     "sort_order": 20,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 12,
@@ -30,7 +48,9 @@
     "active": true,
     "bag_family": "Star",
     "raw_3bag_qty": 4,
-    "raw_2bag_qty": 0
+    "raw_2bag_qty": 0,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 13,
@@ -43,7 +63,9 @@
     "active": true,
     "bag_family": "Averx",
     "raw_3bag_qty": 0,
-    "raw_2bag_qty": 8
+    "raw_2bag_qty": 8,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 14,
@@ -56,7 +78,9 @@
     "active": true,
     "bag_family": "Plain",
     "raw_3bag_qty": 2,
-    "raw_2bag_qty": 1
+    "raw_2bag_qty": 1,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 1,
@@ -66,7 +90,9 @@
     "assigned_worker": "Sohel",
     "sort_group": "Tripods",
     "sort_order": 100,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 2,
@@ -76,7 +102,9 @@
     "assigned_worker": "Sohel",
     "sort_group": "Tripods",
     "sort_order": 110,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 3,
@@ -86,7 +114,9 @@
     "assigned_worker": "Sohel",
     "sort_group": "Tripods",
     "sort_order": 120,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 4,
@@ -96,7 +126,9 @@
     "assigned_worker": "Sohel",
     "sort_group": "Tripods",
     "sort_order": 130,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 5,
@@ -106,7 +138,9 @@
     "assigned_worker": "Sohel",
     "sort_group": "Tripods",
     "sort_order": 140,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 6,
@@ -116,7 +150,9 @@
     "assigned_worker": "Sohel",
     "sort_group": "Audio",
     "sort_order": 150,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 7,
@@ -126,7 +162,9 @@
     "assigned_worker": "Sohel",
     "sort_group": "Audio",
     "sort_order": 155,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 8,
@@ -136,7 +174,9 @@
     "assigned_worker": "Sohel",
     "sort_group": "Lighting",
     "sort_order": 160,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 9,
@@ -146,7 +186,9 @@
     "assigned_worker": "Sohel",
     "sort_group": "Audio",
     "sort_order": 170,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 15,
@@ -156,7 +198,9 @@
     "assigned_worker": "Sohel",
     "sort_group": "Accessories",
     "sort_order": 180,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 16,
@@ -166,7 +210,9 @@
     "assigned_worker": "Sohel",
     "sort_group": "Wallets",
     "sort_order": 190,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
   },
   {
     "id": 17,
@@ -176,6 +222,22 @@
     "assigned_worker": "Sohel",
     "sort_group": "Accessories",
     "sort_order": 200,
-    "active": true
+    "active": true,
+    "created_at": "2026-08-23T14:33:36.522Z",
+    "updated_at": "2026-08-23T14:33:36.522Z"
+  },
+  {
+    "id": 19,
+    "name": "M5 cable",
+    "internal_code": "M5-1",
+    "category": "Cables",
+    "assigned_worker": "Sohel",
+    "sort_group": null,
+    "sort_order": 10,
+    "active": true,
+    "notes": null,
+    "bag_family": null,
+    "created_at": "2026-08-23T15:02:49.821Z",
+    "updated_at": "2026-08-23T15:02:49.821Z"
   }
 ]

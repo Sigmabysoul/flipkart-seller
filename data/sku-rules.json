@@ -1,6 +1,6 @@
 {
   "_comment": "Direct SKU Training & Mapping Rules for Flipkart Label Manager. You can edit this file directly in VS Code!",
-  "description": "Edit or add SKU mappings and pattern rules below. Save this file and the system will apply them immediately.",
+  "description": "Edit or add SKU mappings and pattern rules below. Save this file and click 'Sync with VS Code Disk Files' or make an API request.",
   "sku_mappings": [
     {
       "raw_sku": "BP-ROLL-2026",
@@ -131,6 +131,24 @@
     {
       "raw_sku": "6_EBCC-NAF-AAPRO-NC042",
       "product_name": "AirPods Silicone Case",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "7_TRIP-7FT+RFL-10I-BES3-2-COMBO",
+      "product_name": "Ring Flash 10-Inch",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "7_SEST-NAF-R1SL-B-1",
+      "product_name": "R1SL",
+      "assigned_worker": "Sohel",
+      "match_type": "exact"
+    },
+    {
+      "raw_sku": "9_MIB-USB-NAF-M5-1",
+      "product_name": "M5 cable",
       "assigned_worker": "Sohel",
       "match_type": "exact"
     }
