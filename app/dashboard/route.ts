@@ -7,6 +7,29 @@ function getSnapshot(targetDate: string) {
   );
   const items = shipments.flatMap((s) => s.items);
   const totalItemsCount = items.reduce((sum, i) => sum + i.quantity, 0);
+  const marketplaceTotals = Object.fromEntries(
+    ["flipkart", "meesho", "myntra", "amazon", "snapdeal"].map((marketplace) => [marketplace, 0])
+  ) as Record<string, number>;
+  const marketplaceStockOut = Object.fromEntries(
+    ["flipkart", "meesho", "myntra", "amazon", "snapdeal"].map((marketplace) => [marketplace, 0])
+  ) as Record<string, number>;
+  for (const shipment of shipments) {
+    const marketplace = shipment.marketplace || "flipkart";
+    marketplaceTotals[marketplace] = (marketplaceTotals[marketplace] || 0) + 1;
+    marketplaceStockOut[marketplace] = (marketplaceStockOut[marketplace] || 0) +
+      shipment.items.reduce((sum, item) => sum + item.quantity, 0);
+  }
+  const marketplaceReceived = Object.fromEntries(
+    ["flipkart", "meesho", "myntra", "amazon", "snapdeal"].map((marketplace) => [marketplace, 0])
+  ) as Record<string, number>;
+  const marketplaceBatches = Object.fromEntries(
+    ["flipkart", "meesho", "myntra", "amazon", "snapdeal"].map((marketplace) => [marketplace, 0])
+  ) as Record<string, number>;
+  for (const batch of store.batches.filter((item) => item.processing_date === targetDate && item.status !== "cancelled")) {
+    const marketplace = batch.marketplace || "flipkart";
+    marketplaceReceived[marketplace] += batch.labels?.length || batch.total_pages;
+    marketplaceBatches[marketplace] += 1;
+  }
 
   // Worker breakdowns (single worker per label)
   const workerMap: Record<string, { unique_labels: number; items: number; products: Record<string, number> }> = {};
@@ -320,6 +343,10 @@ function getSnapshot(targetDate: string) {
   const totalCapacityItems = 80;
 
   return {
+    marketplace_totals: marketplaceTotals,
+    marketplace_received: marketplaceReceived,
+    marketplace_stock_out: marketplaceStockOut,
+    marketplace_batches: marketplaceBatches,
     unique_labels: shipments.length,
     total_items: totalItemsCount,
     duplicate_labels: totalDuplicates,
@@ -423,6 +450,7 @@ export async function GET(req: Request) {
     },
     recent_batches: store.batches.slice(0, 10).map((b) => ({
       id: b.id,
+      marketplace: b.marketplace || "flipkart",
       filename: b.filename,
       processing_date: b.processing_date,
       status: b.status,

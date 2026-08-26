@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { store } from "@/lib/serverStore";
+import { store, saveStoreToDisk } from "@/lib/serverStore";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -17,7 +17,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     if (batch.labels && Array.isArray(batch.labels)) {
       for (const lbl of batch.labels) {
-        const existingShipment = store.shipments.find((s) => s.awb === lbl.awb);
+        const existingShipment = store.shipments.find(
+          (s) => (s.marketplace || "flipkart") === (batch.marketplace || "flipkart") && s.awb === lbl.awb,
+        );
 
         if (existingShipment) {
           // It's a duplicate occurrence: update print count and last seen, but do NOT double-count stockout
@@ -42,6 +44,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
           store.shipments.push({
             id: shipmentId,
+            marketplace: batch.marketplace || "flipkart",
             awb: lbl.awb,
             order_id: lbl.order_id,
             first_batch_id: batch.id,
@@ -58,11 +61,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             payment_mode: lbl.payment_mode,
             items,
           });
+
+          for (const item of items) {
+            if (!item.product_id) continue;
+            const product = store.products.find((candidate) => candidate.id === item.product_id);
+            if (!product) continue;
+            const current = Number(product.current_stock) || 0;
+            product.current_stock = current - item.quantity;
+            product.updated_at = now;
+            store.inventoryMovements.unshift({
+              id: store.nextId.inventoryMovement++, product_id: product.id, type: "stock_out",
+              quantity: -item.quantity, balance_after: product.current_stock, batch_id: batch.id,
+              note: `${batch.marketplace || "flipkart"} batch #${batch.id} · ${lbl.awb}`,
+              created_by: "Batch confirmation", created_at: now,
+            });
+          }
         }
       }
     }
 
     batch.status = "confirmed";
+    saveStoreToDisk(store);
     return NextResponse.json({
       status: "confirmed",
       batch_id: batch.id,

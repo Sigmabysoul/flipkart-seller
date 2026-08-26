@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { store, ParsedLabel, LabelSortMode, sortParsedLabels } from "@/lib/serverStore";
+import { store, ParsedLabel, LabelSortMode, sortParsedLabels, MARKETPLACES, Marketplace, saveStoreToDisk } from "@/lib/serverStore";
 import { PDFDocument } from "pdf-lib";
 import { PDFParse } from "pdf-parse";
+import { parseMarketplacePages, ParserDiagnostic } from "@/lib/marketplaceParser";
+import { batchResponse, processMarketplacePdfs } from "@/lib/batchProcessor";
 
 // Safe dynamic PDF parser wrapper
 async function parsePdfText(pdfBuffer: Buffer): Promise<string> {
@@ -454,12 +456,13 @@ function parseTextToLabels(text: string, existingShipments: typeof store.shipmen
 function resolveAndSortLabels(
   rawLabels: ParsedLabel[],
   existingShipments: typeof store.shipments,
-  sortMode: LabelSortMode = "sku_grouped"
+  sortMode: LabelSortMode = "sku_grouped",
+  marketplace: Marketplace = "flipkart",
 ): ParsedLabel[] {
   const seenAwbsInBatch = new Set<string>();
 
   for (const label of rawLabels) {
-    const existingInDb = existingShipments.find((s) => s.awb === label.awb);
+    const existingInDb = existingShipments.find((s) => (s.marketplace || "flipkart") === marketplace && s.awb === label.awb);
     if (existingInDb || seenAwbsInBatch.has(label.awb)) {
       label.duplicate = true;
       if (existingInDb) {
@@ -526,59 +529,27 @@ function resolveAndSortLabels(
   return sortParsedLabels(rawLabels, sortMode);
 }
 
-// Helper to extract real text and extract Flipkart shipping label fields
-async function extractLabelsFromPdfBuffer(pdfBuffer: Buffer, sourceDocument: number): Promise<ParsedLabel[]> {
+// Extract each PDF page independently so fields from adjacent labels cannot be mixed.
+async function extractLabelsFromPdfBuffer(
+  pdfBuffer: Buffer,
+  sourceDocument: number,
+  marketplace: Marketplace,
+): Promise<{ labels: ParsedLabel[]; diagnostic: ParserDiagnostic }> {
+  const parser = new PDFParse({ data: pdfBuffer });
   try {
-    const fullText = await parsePdfText(pdfBuffer);
-    if (!fullText.trim()) return [];
-
-    const awbRegex = /(FMPC\d{10}|FMPP\d{10}|FMPL\d{10}|[A-Z]{3,4}\d{8,12})/g;
-    const orderRegex = /(OD\d{16,20})/g;
-
-    const allAwbs = Array.from(new Set(fullText.match(awbRegex) || []));
-    const allOrders = Array.from(new Set(fullText.match(orderRegex) || []));
-
-    if (allAwbs.length === 0) return [];
-
-    const extracted: ParsedLabel[] = [];
-    allAwbs.forEach((awb, idx) => {
-      const orderId = allOrders[idx] || `OD${Math.floor(100000000000000000 + Math.random() * 900000000000000000)}`;
-      const pageNum = idx + 1;
-
-      // Extract SKU hints or default to unmapped SKU for training
-      let rawSku = "7_SEST-NAF-SE-3B-B-1";
-      const skuMatch = fullText.match(/(?:SKU|Item Code|FSN)[:\s]+([A-Za-z0-9_\-+.]+)/i);
-      if (skuMatch) rawSku = skuMatch[1];
-
-      extracted.push({
-        page: pageNum,
-        original_page: pageNum,
-        source_document: sourceDocument,
-        awb: String(awb),
-        order_id: String(orderId),
-        duplicate: false,
-        mismatch: false,
-        payment_mode: fullText.includes("COD") ? "COD" : "PREPAID",
-        customer_name: `Customer ${pageNum}`,
-        customer_city: "Dispatch Hub",
-        items: [
-          {
-            raw_sku: rawSku,
-            product_id: null,
-            product: null,
-            description: `Flipkart Order Item - ${rawSku}`,
-            quantity: 1,
-            assigned_worker: "Sohel",
-            mapping_status: "unknown",
-          },
-        ],
-      });
-    });
-
-    return extracted;
+    const result = await parser.getText();
+    return parseMarketplacePages(marketplace, result.pages, sourceDocument);
   } catch (err) {
     console.warn("PDF parse fallback:", err);
-    return [];
+    return {
+      labels: [],
+      diagnostic: {
+        marketplace, pages_read: 0, labels_found: 0, missing_awb_pages: [],
+        missing_order_pages: [], missing_sku_pages: [], warnings: ["PDF text extraction failed."],
+      },
+    };
+  } finally {
+    await parser.destroy();
   }
 }
 
@@ -587,83 +558,27 @@ export async function POST(req: Request) {
     const formData = await req.formData();
     const files = formData.getAll("files") as File[];
     const sortModeParam = (formData.get("sort_mode") as LabelSortMode) || "sku_grouped";
+    const marketplaceParam = String(formData.get("marketplace") || "flipkart").toLowerCase();
+
+    if (!MARKETPLACES.includes(marketplaceParam as Marketplace)) {
+      return NextResponse.json({ detail: "Unsupported marketplace" }, { status: 400 });
+    }
+    const marketplace = marketplaceParam as Marketplace;
 
     if (!files || files.length === 0) {
       return NextResponse.json({ detail: "Upload at least one PDF file" }, { status: 400 });
     }
 
-    const filenames = files.map((f) => f.name);
-    const sourcePdfsBase64: string[] = [];
-    let totalPdfPages = 0;
-    const realExtractedLabels: ParsedLabel[] = [];
-
-    // Inspect real PDF files if valid binary
-    for (const [fileIndex, file] of files.entries()) {
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        if (arrayBuffer.byteLength > 0) {
-          const buffer = Buffer.from(arrayBuffer);
-          sourcePdfsBase64.push(buffer.toString("base64"));
-          const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
-          totalPdfPages += doc.getPageCount();
-
-          const parsed = await extractLabelsFromPdfBuffer(buffer, fileIndex);
-          if (parsed.length > 0) {
-            realExtractedLabels.push(...parsed);
-          }
-        }
-      } catch (pdfErr) {
-        console.warn("PDF inspection notice:", pdfErr);
-      }
-    }
-
-    if (totalPdfPages === 0) totalPdfPages = realExtractedLabels.length || 80;
-
-    const todayStr = new Date().toISOString().split("T")[0];
-    const now = new Date().toISOString();
-
-    const parsedLabels = realExtractedLabels.length > 0
-      ? resolveAndSortLabels(realExtractedLabels, store.shipments, sortModeParam)
-      : parseTextToLabels("", store.shipments, sortModeParam);
-
-    const uniqueCount = parsedLabels.filter((l) => !l.duplicate).length;
-    const dupesCount = parsedLabels.filter((l) => l.duplicate).length;
-    const totalItems = parsedLabels.reduce((sum, l) => sum + l.items.reduce((s, i) => s + i.quantity, 0), 0);
-    const unknownCount = parsedLabels.flatMap((l) => l.items).filter((i) => i.mapping_status === "unknown").length;
-
-    const newBatch = {
-      id: store.nextId.batch++,
-      filename: filenames.join(", "),
-      processing_date: todayStr,
-      created_at: now,
-      total_pages: totalPdfPages,
-      unique_awbs: uniqueCount,
-      duplicate_awbs: dupesCount,
-      total_items: totalItems,
-      unknown_skus: unknownCount,
-      status: (unknownCount > 0 || dupesCount > 0 ? "needs_review" : "draft") as any,
-      raw_json: JSON.stringify(parsedLabels),
-      labels: parsedLabels,
-      source_pdfs_base64: sourcePdfsBase64,
-    };
-
-    store.batches.unshift(newBatch);
-
-    return NextResponse.json({
-      batch_id: newBatch.id,
-      status: newBatch.status,
-      filename: newBatch.filename,
-      processing_date: newBatch.processing_date,
-      pages_scanned: newBatch.total_pages,
-      unique_awbs: uniqueCount,
-      duplicate_awbs: dupesCount,
-      total_items: totalItems,
-      unknown_skus: unknownCount,
-      sort_mode: sortModeParam,
-      labels: parsedLabels,
-      cropped_labels_url: `/batches/${newBatch.id}/pdf?sort=${sortModeParam}`,
-    });
+    const incoming = await Promise.all(files.map(async (file) => ({
+      name: file.name,
+      buffer: Buffer.from(await file.arrayBuffer()),
+    })));
+    const result = await processMarketplacePdfs({ marketplace, files: incoming, sortMode: sortModeParam, source: "manual" });
+    return NextResponse.json(batchResponse(result.batch, result.diagnostics, sortModeParam));
   } catch (err: any) {
-    return NextResponse.json({ detail: err?.message || "Failed to process files" }, { status: 500 });
+    return NextResponse.json({
+      detail: err?.message || "Failed to process files",
+      parser_diagnostics: err?.diagnostics,
+    }, { status: Number(err?.status) || 500 });
   }
 }

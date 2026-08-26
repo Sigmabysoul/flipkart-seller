@@ -1,10 +1,43 @@
 import fs from 'fs';
 import path from 'path';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_DIR = process.env.LABEL_MANAGER_DATA_DIR
+  ? path.resolve(process.env.LABEL_MANAGER_DATA_DIR)
+  : path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const SKU_RULES_FILE = path.join(DATA_DIR, 'sku-rules.json');
 const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
+
+export const MARKETPLACES = ['flipkart', 'meesho', 'myntra', 'amazon', 'snapdeal'] as const;
+export type Marketplace = (typeof MARKETPLACES)[number];
+
+export interface IngestionSchedule {
+  id: number;
+  marketplace: Marketplace;
+  enabled: boolean;
+  time: string;
+  timezone: string;
+  days: number[];
+  connection_status: 'not_configured' | 'configured';
+  last_run_at?: string | null;
+  next_run_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IngestionRun {
+  id: number;
+  schedule_id: number;
+  marketplace: Marketplace;
+  trigger: 'scheduled' | 'manual';
+  status: 'running' | 'completed' | 'failed' | 'requires_configuration' | 'not_due';
+  files_received: number;
+  labels_received: number;
+  started_at: string;
+  finished_at?: string | null;
+  message?: string | null;
+  batch_id?: number | null;
+}
 
 export interface Worker {
   id: number;
@@ -33,8 +66,22 @@ export interface Product {
   bag_family?: 'Star' | 'Averx' | 'Plain' | null;
   raw_3bag_qty?: number;
   raw_2bag_qty?: number;
+  current_stock?: number;
+  reorder_level?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface InventoryMovement {
+  id: number;
+  product_id: number;
+  type: 'stock_out' | 'restock' | 'adjustment';
+  quantity: number;
+  balance_after: number;
+  batch_id?: number | null;
+  note?: string | null;
+  created_by: string;
+  created_at: string;
 }
 
 export interface SKUMapping {
@@ -101,6 +148,7 @@ export interface LabelItem {
 
 export interface Shipment {
   id: number;
+  marketplace?: Marketplace;
   awb: string;
   order_id?: string | null;
   first_batch_id: number;
@@ -120,6 +168,7 @@ export interface Shipment {
 
 export interface BatchItem {
   id: number;
+  marketplace?: Marketplace;
   filename: string;
   processing_date: string;
   created_at: string;
@@ -132,6 +181,26 @@ export interface BatchItem {
   raw_json?: string | null;
   labels?: ParsedLabel[];
   source_pdfs_base64?: string[];
+  parser_diagnostics?: unknown[];
+  intake_source?: 'manual' | 'scheduled' | 'webhook';
+}
+
+export interface PrintJob {
+  id: number;
+  batch_id: number;
+  marketplace: Marketplace;
+  status: 'queued' | 'claimed' | 'opened' | 'printed' | 'failed' | 'cancelled';
+  sort_mode: LabelSortMode;
+  print_type: 'full_batch' | 'selected' | 'reprint';
+  requested_by: string;
+  printer_name?: string | null;
+  agent_id?: string | null;
+  attempts: number;
+  label_count: number;
+  error_message?: string | null;
+  created_at: string;
+  claimed_at?: string | null;
+  completed_at?: string | null;
 }
 
 export interface ParsedLabel {
@@ -321,8 +390,12 @@ export interface StoreData {
   patternRules: PatternRule[];
   trainingHistory: TrainingHistoryItem[];
   printEvents: PrintEvent[];
+  printJobs: PrintJob[];
   batches: BatchItem[];
   shipments: Shipment[];
+  ingestionSchedules: IngestionSchedule[];
+  ingestionRuns: IngestionRun[];
+  inventoryMovements: InventoryMovement[];
   nextId: {
     worker: number;
     category: number;
@@ -332,9 +405,13 @@ export interface StoreData {
     rule: number;
     history: number;
     print: number;
+    printJob: number;
     batch: number;
     shipment: number;
     item: number;
+    schedule: number;
+    ingestionRun: number;
+    inventoryMovement: number;
   };
 }
 
@@ -347,6 +424,19 @@ export function initStore(): StoreData {
 
   const now = new Date().toISOString();
   const todayStr = now.split("T")[0];
+  const ingestionSchedules: IngestionSchedule[] = MARKETPLACES.map((marketplace, index) => ({
+    id: index + 1,
+    marketplace,
+    enabled: true,
+    time: ['09:00', '09:15', '09:30', '09:45', '10:00'][index],
+    timezone: 'Asia/Kolkata',
+    days: [1, 2, 3, 4, 5, 6],
+    connection_status: 'not_configured',
+    last_run_at: null,
+    next_run_at: null,
+    created_at: now,
+    updated_at: now,
+  }));
 
   const workers: Worker[] = [
     { id: 1, name: "Sohel", active: true, phone: "+91 9876543210", created_at: now },
@@ -794,8 +884,12 @@ export function initStore(): StoreData {
     patternRules,
     trainingHistory,
     printEvents,
+    printJobs: [],
     batches,
     shipments,
+    ingestionSchedules,
+    ingestionRuns: [],
+    inventoryMovements: [],
     nextId: {
       worker: 3,
       category: 8,
@@ -805,9 +899,13 @@ export function initStore(): StoreData {
       rule: 10,
       history: 4,
       print: 2,
-      batch: 2,
+      printJob: 1,
+      batch: 3,
       shipment: 18,
       item: 21,
+      schedule: 6,
+      ingestionRun: 1,
+      inventoryMovement: 1,
     },
   };
 
@@ -876,18 +974,29 @@ export function loadStoreFromDisk() {
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.products) && Array.isArray(parsed.skuMappings)) {
         parsed.nextId ||= {};
+        parsed.ingestionSchedules ||= MARKETPLACES.map((marketplace, index) => ({
+          id: index + 1, marketplace, enabled: true,
+          time: ['09:00', '09:15', '09:30', '09:45', '10:00'][index],
+          timezone: 'Asia/Kolkata', days: [1, 2, 3, 4, 5, 6],
+          connection_status: 'not_configured', last_run_at: null, next_run_at: null,
+          created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        }));
+        parsed.ingestionRuns ||= [];
+        parsed.inventoryMovements ||= [];
+        parsed.printJobs ||= [];
+        for (const product of parsed.products as Product[]) {
+          product.current_stock = Number(product.current_stock) || 0;
+          product.reorder_level = Number(product.reorder_level) || 0;
+        }
+
         const collections = {
-          worker: parsed.workers,
-          category: parsed.categories,
-          product: parsed.products,
-          mapping: parsed.skuMappings,
-          recipe: parsed.packingRecipes,
-          rule: parsed.patternRules,
-          history: parsed.trainingHistory,
-          print: parsed.printEvents,
-          batch: parsed.batches,
+          worker: parsed.workers, category: parsed.categories, product: parsed.products,
+          mapping: parsed.skuMappings, recipe: parsed.packingRecipes, rule: parsed.patternRules,
+          history: parsed.trainingHistory, print: parsed.printEvents, printJob: parsed.printJobs, batch: parsed.batches,
           shipment: parsed.shipments,
           item: (parsed.shipments || []).flatMap((shipment: Shipment) => shipment.items || []),
+          schedule: parsed.ingestionSchedules, ingestionRun: parsed.ingestionRuns,
+          inventoryMovement: parsed.inventoryMovements,
         };
 
         for (const [counter, records] of Object.entries(collections)) {

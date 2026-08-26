@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { store } from "@/lib/serverStore";
+import { saveStoreToDisk, store } from "@/lib/serverStore";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -42,11 +42,20 @@ export async function POST(req: Request) {
       bag_family: body.bag_family || null,
       raw_3bag_qty: body.raw_3bag_qty !== undefined ? Number(body.raw_3bag_qty) : undefined,
       raw_2bag_qty: body.raw_2bag_qty !== undefined ? Number(body.raw_2bag_qty) : undefined,
+      current_stock: Math.max(0, Number(body.current_stock) || 0),
+      reorder_level: Math.max(0, Number(body.reorder_level) || 0),
       created_at: now,
       updated_at: now,
     };
 
     store.products.push(newProduct);
+    if (newProduct.current_stock > 0) {
+      store.inventoryMovements.unshift({
+        id: store.nextId.inventoryMovement++, product_id: newProduct.id, type: "restock",
+        quantity: newProduct.current_stock, balance_after: newProduct.current_stock,
+        note: "Opening stock", created_by: "System", created_at: now,
+      });
+    }
 
     if (newProduct.bag_family) {
       store.packingRecipes.push({
@@ -58,6 +67,7 @@ export async function POST(req: Request) {
       });
     }
 
+    saveStoreToDisk(store);
     return NextResponse.json(newProduct, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ detail: err.message }, { status: 500 });

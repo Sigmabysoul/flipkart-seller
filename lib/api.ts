@@ -132,6 +132,8 @@ export type ApiProduct = {
   bag_family?: 'Star' | 'Averx' | 'Plain' | null
   raw_3bag_qty?: number
   raw_2bag_qty?: number
+  current_stock?: number
+  reorder_level?: number
   created_at?: string
   updated_at?: string
 }
@@ -200,6 +202,10 @@ export type DashboardResponse = {
   date: string
   unique_labels: number
   total_items: number
+  marketplace_totals: Record<'flipkart' | 'meesho' | 'myntra' | 'amazon' | 'snapdeal', number>
+  marketplace_received: Record<'flipkart' | 'meesho' | 'myntra' | 'amazon' | 'snapdeal', number>
+  marketplace_stock_out: Record<'flipkart' | 'meesho' | 'myntra' | 'amazon' | 'snapdeal', number>
+  marketplace_batches: Record<'flipkart' | 'meesho' | 'myntra' | 'amazon' | 'snapdeal', number>
   duplicate_labels: number
   unknown_skus: number
   worker_totals: Record<string, { unique_labels: number; items: number; products: Record<string, number> }>
@@ -234,6 +240,7 @@ export type DashboardResponse = {
   }
   recent_batches: {
     id: number
+    marketplace?: 'flipkart' | 'meesho' | 'myntra' | 'amazon' | 'snapdeal'
     filename: string
     processing_date: string
     status: string
@@ -316,6 +323,7 @@ export type ParsedLabelItem = {
 
 export type ProcessBatchResponse = {
   batch_id: number
+  marketplace: 'flipkart' | 'meesho' | 'myntra' | 'amazon' | 'snapdeal'
   status: 'draft' | 'needs_review' | 'confirmed' | 'cancelled'
   filename: string
   processing_date: string
@@ -327,6 +335,40 @@ export type ProcessBatchResponse = {
   sort_mode?: string
   labels: ParsedLabelItem[]
   cropped_labels_url: string
+  intake_source?: 'manual' | 'scheduled' | 'webhook'
+  parser_diagnostics?: {
+    marketplace: string
+    pages_read: number
+    labels_found: number
+    missing_awb_pages: number[]
+    missing_order_pages: number[]
+    missing_sku_pages: number[]
+    warnings: string[]
+  }[]
+}
+
+export type IngestionSchedule = {
+  id: number
+  marketplace: 'flipkart' | 'meesho' | 'myntra' | 'amazon' | 'snapdeal'
+  enabled: boolean
+  time: string
+  timezone: string
+  days: number[]
+  connection_status: 'not_configured' | 'configured'
+  last_run_at?: string | null
+  updated_at: string
+}
+
+export type IngestionRun = {
+  id: number
+  marketplace: IngestionSchedule['marketplace']
+  trigger: 'scheduled' | 'manual'
+  status: 'running' | 'completed' | 'failed' | 'requires_configuration' | 'not_due'
+  files_received: number
+  labels_received: number
+  started_at: string
+  message?: string | null
+  batch_id?: number | null
 }
 
 // Products APIs
@@ -386,22 +428,41 @@ export const createPatternRule = (payload: Partial<PatternRule>) => apiFetch<Pat
 export const deletePatternRule = (id: number) => apiFetch<{ status: string }>(`/training/rules?id=${id}`, { method: "DELETE" })
 
 // Batch & Labels Processing APIs
-export async function processLabels(files: File[], sortMode = "sku_grouped"): Promise<ProcessBatchResponse> {
+export async function processLabels(files: File[], sortMode = "sku_grouped", marketplace = "flipkart"): Promise<ProcessBatchResponse> {
   const form = new FormData()
   files.forEach((file) => form.append("files", file))
   form.append("sort_mode", sortMode)
+  form.append("marketplace", marketplace)
   return apiFetch<ProcessBatchResponse>("/batches/process", { method: "POST", body: form })
 }
 export const confirmBatch = (id: number) => apiFetch<any>(`/batches/${id}/confirm`, { method: "POST" })
 export const cancelBatch = (id: number) => apiFetch<any>(`/batches/${id}/cancel`, { method: "POST" })
-export const recordPrintEvent = (id: number, printed_by = "Operator", print_type = "full_batch") =>
-  apiFetch<any>(`/batches/${id}/print`, { method: "POST", body: JSON.stringify({ printed_by, print_type }) })
+export const recordPrintEvent = (id: number, printed_by = "Operator", print_type = "full_batch", sort_mode = "sku_grouped", delivery_mode = "browser") =>
+  apiFetch<any>(`/batches/${id}/print`, { method: "POST", body: JSON.stringify({ printed_by, print_type, sort_mode, delivery_mode }) })
+
+export type PrintJob = {
+  id: number
+  batch_id: number
+  marketplace: string
+  status: 'queued' | 'claimed' | 'opened' | 'printed' | 'failed' | 'cancelled'
+  sort_mode: string
+  requested_by: string
+  printer_name?: string | null
+  attempts: number
+  label_count: number
+  error_message?: string | null
+  created_at: string
+  pdf_url: string
+}
+export const getPrintJobs = (status = "all") => apiFetch<{ total: number; jobs: PrintJob[] }>(`/print-jobs?status=${status}`)
+export const updatePrintJob = (id: number, action: 'claim' | 'complete' | 'fail' | 'cancel', payload: Record<string, unknown> = {}) =>
+  apiFetch<any>(`/print-jobs/${id}`, { method: "PATCH", body: JSON.stringify({ action, ...payload }) })
 
 // Dashboard & History APIs
 export const getDashboard = (date?: string) =>
   apiFetch<DashboardResponse>(`/dashboard${date ? `?date=${encodeURIComponent(date)}` : ""}`)
-export const getBatches = (date?: string, status = "all") =>
-  apiFetch<{ total: number; batches: any[] }>(`/batches?${date ? `date=${encodeURIComponent(date)}&` : ""}status=${encodeURIComponent(status)}`)
+export const getBatches = (date?: string, status = "all", marketplace = "all") =>
+  apiFetch<{ total: number; batches: any[] }>(`/batches?${date ? `date=${encodeURIComponent(date)}&` : ""}status=${encodeURIComponent(status)}&marketplace=${encodeURIComponent(marketplace)}`)
 export const getBatchById = (id: number) =>
   apiFetch<any>(`/batches/${id}`)
 export const deleteBatch = (id: number) =>
@@ -430,6 +491,42 @@ export const syncDatabaseWithDisk = () =>
   apiFetch<{ status: string; message: string; result: any }>("/database/sync", { method: "POST" })
 export const getDatabaseStats = () =>
   apiFetch<any>("/database/sync", { method: "GET" })
+export const getSystemReadiness = () => apiFetch<{
+  status: 'ready' | 'action_required'
+  checked_at: string
+  checks: Record<string, { ready: boolean; detail: string }>
+  marketplaces: Record<string, { ready: boolean; feed_configured: boolean; token_configured: boolean; schedule_enabled: boolean; scheduled_time: string | null; last_completed_at: string | null }>
+  blockers: { key: string; detail: string }[]
+  workflow: Record<string, unknown>
+}>("/readiness")
+
+export const getIngestionSchedules = () =>
+  apiFetch<{ schedules: IngestionSchedule[]; runs: IngestionRun[]; scheduler: { configured: boolean; interval_minutes: number; endpoint: string } }>("/ingestion/schedules")
+export const updateIngestionSchedule = (payload: Pick<IngestionSchedule, 'marketplace'> & Partial<Pick<IngestionSchedule, 'enabled' | 'time' | 'days'>>) =>
+  apiFetch<IngestionSchedule>("/ingestion/schedules", { method: "PUT", body: JSON.stringify(payload) })
+export const runMarketplaceIngestion = (marketplace?: IngestionSchedule['marketplace'], force = false) =>
+  apiFetch<{ checked_at: string; runs: IngestionRun[] }>("/ingestion/run", {
+    method: "POST",
+    body: JSON.stringify({ marketplace, force }),
+  })
+
+export type InventoryMovement = {
+  id: number
+  product_id: number
+  type: 'stock_out' | 'restock' | 'adjustment'
+  quantity: number
+  balance_after: number
+  batch_id?: number | null
+  note?: string | null
+  created_by: string
+  created_at: string
+}
+export const getInventory = () => apiFetch<{
+  products: { id: number; name: string; internal_code?: string | null; current_stock: number; reorder_level: number; stock_status: 'low' | 'healthy' }[]
+  movements: InventoryMovement[]
+}>("/inventory")
+export const addInventoryMovement = (payload: { product_id: number; quantity: number; type?: 'restock' | 'adjustment'; note?: string; created_by?: string }) =>
+  apiFetch<any>("/inventory", { method: "POST", body: JSON.stringify(payload) })
 export const getFullDatabaseExport = () =>
   apiFetch<any>("/database", { method: "GET" })
 export const importDatabaseData = (data: any) =>

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { store } from "@/lib/serverStore";
+import { saveStoreToDisk, store } from "@/lib/serverStore";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,6 +27,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (body.bag_family !== undefined) product.bag_family = body.bag_family;
   if (body.raw_3bag_qty !== undefined) product.raw_3bag_qty = Number(body.raw_3bag_qty);
   if (body.raw_2bag_qty !== undefined) product.raw_2bag_qty = Number(body.raw_2bag_qty);
+  if (body.reorder_level !== undefined) product.reorder_level = Math.max(0, Number(body.reorder_level) || 0);
   if (body.active !== undefined) product.active = Boolean(body.active);
   product.updated_at = now;
 
@@ -50,6 +51,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     store.packingRecipes.splice(recipeIndex, 1);
   }
 
+  saveStoreToDisk(store);
   return NextResponse.json(product);
 }
 
@@ -61,5 +63,6 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   product.active = false;
   product.updated_at = new Date().toISOString();
+  saveStoreToDisk(store);
   return NextResponse.json({ status: "deactivated", product });
 }

@@ -70,10 +70,12 @@ import {
   Sparkle,
   Bookmark,
   GitBranch,
+  Store,
 } from 'lucide-react'
 
 import {
   getDashboard,
+  getBatches,
   getProducts,
   createProduct,
   updateProduct,
@@ -107,6 +109,14 @@ import {
   syncDatabaseWithDisk,
   getFullDatabaseExport,
   importDatabaseData,
+  getIngestionSchedules,
+  updateIngestionSchedule,
+  runMarketplaceIngestion,
+  getInventory,
+  addInventoryMovement,
+  getPrintJobs,
+  updatePrintJob,
+  getSystemReadiness,
   ApiProduct,
   ApiWorker,
   ApiCategory,
@@ -116,11 +126,13 @@ import {
   PatternRule,
   ParsedLabelItem,
   ProcessBatchResponse,
+  IngestionSchedule,
 } from '@/lib/api'
 import { ApiDiagnostics } from './api-diagnostics'
 
 const nav = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'marketplaces', label: 'Marketplace Sections', icon: Store },
   { id: 'kartik', label: "Kartik Da's Station", icon: Layers },
   { id: 'my-station', label: 'My Station (Sohel)', icon: Box },
   { id: 'process', label: 'Process Labels', icon: CloudUpload },
@@ -129,6 +141,15 @@ const nav = [
   { id: 'history', label: 'History & Logs', icon: Archive },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ]
+
+function indiaDateString(offsetDays = 0) {
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
+  const date = new Date(`${today}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + offsetDays)
+  return date.toISOString().slice(0, 10)
+}
 
 function Badge({ children, kind = 'neutral' }: { children: React.ReactNode; kind?: string }) {
   return <span className={`badge badge-${kind}`}>{children}</span>
@@ -355,7 +376,7 @@ export default function LabelManager() {
   const [page, setPage] = useState('dashboard')
   const [dark, setDark] = useState(true)
   const [mobile, setMobile] = useState(false)
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [selectedDate, setSelectedDate] = useState(() => indiaDateString())
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
@@ -828,6 +849,16 @@ export default function LabelManager() {
             />
           )}
 
+          {page === 'marketplaces' && (
+            <MarketplaceSectionsView
+              go={go}
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+              setActiveBatch={setActiveBatch}
+              showToast={showToast}
+            />
+          )}
+
           {page === 'kartik' && (
             <KartikStationView
               go={go}
@@ -925,11 +956,11 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
   }
 
   const setDateToToday = () => {
-    setSelectedDate('2026-08-22')
+    setSelectedDate(indiaDateString())
   }
 
   const setDateToYesterday = () => {
-    setSelectedDate('2026-08-21')
+    setSelectedDate(indiaDateString(-1))
   }
 
   // Refresh handler
@@ -1100,25 +1131,25 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
-              selectedDate === '2026-08-22'
+              selectedDate === indiaDateString()
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'bg-card border border-border text-muted hover:text-foreground'
             }`}
             onClick={setDateToToday}
             id="quick-date-today-btn"
           >
-            Today (Aug 22)
+            Today
           </button>
           <button
             className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
-              selectedDate === '2026-08-21'
+              selectedDate === indiaDateString(-1)
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'bg-card border border-border text-muted hover:text-foreground'
             }`}
             onClick={setDateToYesterday}
             id="quick-date-yesterday-btn"
           >
-            Yesterday (Aug 21)
+            Yesterday
           </button>
           <div className="flex items-center border border-border rounded-md bg-card overflow-hidden">
             <button
@@ -1150,6 +1181,38 @@ function Dashboard({ go, selectedDate, setSelectedDate, showToast }: any) {
 
       {/* Real-Time API & NEXT_PUBLIC_API_URL Diagnostics */}
       <ApiDiagnostics />
+
+      <section className="panel mb-6" id="marketplace-label-summary">
+        <div className="panel-title">
+          <div>
+            <h2>Labels received by marketplace</h2>
+            <p>Confirmed unique labels received for the selected day</p>
+          </div>
+          <Badge kind="success">
+            {Object.values(dash?.marketplace_received || {}).reduce((sum: number, value) => sum + Number(value), 0)} received
+          </Badge>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {([
+            ['flipkart', 'Flipkart', 'text-blue-600 bg-blue-50 dark:bg-blue-950/30'],
+            ['meesho', 'Meesho', 'text-fuchsia-600 bg-fuchsia-50 dark:bg-fuchsia-950/30'],
+            ['myntra', 'Myntra', 'text-pink-600 bg-pink-50 dark:bg-pink-950/30'],
+            ['amazon', 'Amazon', 'text-amber-600 bg-amber-50 dark:bg-amber-950/30'],
+            ['snapdeal', 'Snapdeal', 'text-rose-600 bg-rose-50 dark:bg-rose-950/30'],
+          ] as const).map(([key, label, tone]) => (
+            <div key={key} className="rounded-xl border border-border bg-card p-3">
+              <div className={`inline-flex rounded-lg p-2 mb-3 ${tone}`}><Package size={17} /></div>
+              <div className="text-xs font-semibold text-muted mb-2">{label}</div>
+              <div className="grid grid-cols-3 gap-1 text-center">
+                <div><div className="text-lg font-bold text-foreground">{dash?.marketplace_received?.[key] ?? 0}</div><div className="text-[9px] uppercase text-muted">Received</div></div>
+                <div><div className="text-lg font-bold text-emerald-500">{dash?.marketplace_totals?.[key] ?? 0}</div><div className="text-[9px] uppercase text-muted">Confirmed</div></div>
+                <div><div className="text-lg font-bold text-amber-500">{dash?.marketplace_stock_out?.[key] ?? 0}</div><div className="text-[9px] uppercase text-muted">Stock out</div></div>
+              </div>
+              <div className="mt-2 text-[10px] text-muted">{dash?.marketplace_batches?.[key] ?? 0} batches</div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Top Level Metric Stats Grid */}
       <div className="stats-grid" id="main-stats-grid">
@@ -2071,23 +2134,23 @@ Product Summary:
         <div className="flex items-center gap-2 flex-wrap">
           <button
             className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
-              selectedDate === '2026-08-22'
+              selectedDate === indiaDateString()
                 ? 'bg-teal-600 text-white shadow-sm'
                 : 'bg-card border border-border text-muted hover:text-foreground'
             }`}
-            onClick={() => setSelectedDate('2026-08-22')}
+            onClick={() => setSelectedDate(indiaDateString())}
           >
-            Today (Aug 22)
+            Today
           </button>
           <button
             className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
-              selectedDate === '2026-08-21'
+              selectedDate === indiaDateString(-1)
                 ? 'bg-teal-600 text-white shadow-sm'
                 : 'bg-card border border-border text-muted hover:text-foreground'
             }`}
-            onClick={() => setSelectedDate('2026-08-21')}
+            onClick={() => setSelectedDate(indiaDateString(-1))}
           >
-            Yesterday (Aug 21)
+            Yesterday
           </button>
           <input
             type="date"
@@ -2752,23 +2815,23 @@ function MyStationView({ go, selectedDate, setSelectedDate, showToast }: any) {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
-              selectedDate === '2026-08-22'
+              selectedDate === indiaDateString()
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'bg-card border border-border text-muted hover:text-foreground'
             }`}
-            onClick={() => setSelectedDate('2026-08-22')}
+            onClick={() => setSelectedDate(indiaDateString())}
           >
-            Today (Aug 22)
+            Today
           </button>
           <button
             className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
-              selectedDate === '2026-08-21'
+              selectedDate === indiaDateString(-1)
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'bg-card border border-border text-muted hover:text-foreground'
             }`}
-            onClick={() => setSelectedDate('2026-08-21')}
+            onClick={() => setSelectedDate(indiaDateString(-1))}
           >
-            Yesterday (Aug 21)
+            Yesterday
           </button>
           <input
             type="date"
@@ -3133,6 +3196,7 @@ function ProcessLabelsView({
   }
 
   const [sortMode, setSortMode] = useState<SortMode>('sku_grouped')
+  const [marketplace, setMarketplace] = useState<'flipkart' | 'meesho' | 'myntra' | 'amazon' | 'snapdeal'>('flipkart')
   const [selectedSkuCluster, setSelectedSkuCluster] = useState<string | null>(null)
   const [activeFilter, setActiveFilter] = useState<'all' | 'mapped' | 'duplicate' | 'unknown' | 'mismatch'>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -3178,7 +3242,7 @@ function ProcessLabelsView({
     }, 280)
 
     try {
-      const result = await processLabels(Array.from(files), sortMode)
+      const result = await processLabels(Array.from(files), sortMode, marketplace)
       clearInterval(interval)
       setCurrentStep(7)
       setBatchData(result)
@@ -3210,8 +3274,8 @@ function ProcessLabelsView({
   const handlePrint = async () => {
     if (!batchData) return
     try {
-      await recordPrintEvent(batchData.batch_id, 'Sohel', 'full_batch')
-      window.open(`/batches/${batchData.batch_id}/pdf?sort=${sortMode}`, '_blank')
+      const queued = await recordPrintEvent(batchData.batch_id, 'Sohel', 'full_batch', sortMode, 'browser')
+      window.open(queued.pdf_url, '_blank')
       showToast(`Print opened in real-time sequence (${sortModeLabel(sortMode)}).`)
       revalidateWarehouseData()
     } catch (err: any) {
@@ -3292,8 +3356,8 @@ function ProcessLabelsView({
     <>
       <PageHead
         eyebrow="Operations / Process labels"
-        title="Process Flipkart Labels"
-        description="Upload Flipkart shipping-label PDFs. Automatically crops out invoices, extracts AWBs & SKUs, and sorts labels in contiguous sequence."
+        title="Process Marketplace Labels"
+        description="Upload shipping-label PDFs from Flipkart, Meesho, Myntra, Amazon, or Snapdeal. Labels are cropped, mapped, counted, and sorted into a printable batch."
         action={
           <div className="flex gap-2">
             {batchData && (
@@ -3310,13 +3374,30 @@ function ProcessLabelsView({
         <div className="panel upload-panel" id="upload-panel">
           <div className="panel-title">
             <div>
-              <h2>Upload Flipkart label PDF</h2>
+              <h2>Upload {marketplace.charAt(0).toUpperCase() + marketplace.slice(1)} label PDF</h2>
               <p>Supports multi-file bulk uploads (up to 50 MB each)</p>
             </div>
             <Badge kind={batchData ? 'success' : 'neutral'}>
               {batchData ? 'PDF Loaded' : 'Step 1: Upload'}
             </Badge>
           </div>
+
+          <label className="block mb-3">
+            <span className="block text-xs font-semibold text-muted mb-1.5">Marketplace section</span>
+            <select
+              value={marketplace}
+              onChange={(e) => setMarketplace(e.target.value as typeof marketplace)}
+              disabled={processing}
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500"
+              id="marketplace-select"
+            >
+              <option value="flipkart">Flipkart</option>
+              <option value="meesho">Meesho</option>
+              <option value="myntra">Myntra</option>
+              <option value="amazon">Amazon</option>
+              <option value="snapdeal">Snapdeal</option>
+            </select>
+          </label>
 
           <div
             className={`upload-zone ${batchData ? 'uploaded' : ''}`}
@@ -3340,7 +3421,7 @@ function ProcessLabelsView({
               )}
             </div>
 
-            <h3>{batchData ? batchData.filename : 'Drop Flipkart label PDF here'}</h3>
+            <h3>{batchData ? batchData.filename : `Drop ${marketplace.charAt(0).toUpperCase() + marketplace.slice(1)} label PDF here`}</h3>
             <p>
               {batchData
                 ? `${batchData.pages_scanned} pages extracted and sorted in real-time`
@@ -3411,6 +3492,19 @@ function ProcessLabelsView({
               <strong className="text-xs text-blue-400 font-semibold">{sortMode === 'sku_grouped' ? 'SKU Sequence' : sortMode === 'worker_sku' ? 'Worker Grouped' : 'Custom'}</strong>
             </div>
           </div>
+
+          {batchData?.parser_diagnostics?.some((diagnostic: NonNullable<ProcessBatchResponse['parser_diagnostics']>[number]) => diagnostic.warnings.length > 0) && (
+            <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-700 dark:text-amber-300">
+                <AlertTriangle size={14} /> Parser review
+              </div>
+              <ul className="mt-2 space-y-1 text-xs text-amber-700 dark:text-amber-300">
+                {batchData.parser_diagnostics.flatMap((diagnostic: NonNullable<ProcessBatchResponse['parser_diagnostics']>[number], index: number) =>
+                  diagnostic.warnings.map((warning: string) => <li key={`${index}-${warning}`}>• {warning}</li>)
+                )}
+              </ul>
+            </div>
+          )}
 
           <div className="summary-note">
             <ShieldAlert size={18} />
@@ -3892,6 +3986,124 @@ function ProcessLabelsView({
 }
 
 // ----------------------------------------------------------------------
+// MARKETPLACE OPERATIONS SECTIONS
+// ----------------------------------------------------------------------
+function MarketplaceSectionsView({ go, selectedDate, setSelectedDate, setActiveBatch, showToast }: any) {
+  const { data, mutate: refreshBatches, isLoading } = useSWR(
+    `/batches?date=${selectedDate}&marketplace=all`,
+    () => getBatches(selectedDate, 'all', 'all'),
+    { refreshInterval: 60000 },
+  )
+  const marketplaces = [
+    { key: 'flipkart', label: 'Flipkart', tone: 'border-blue-500/30', accent: 'text-blue-500' },
+    { key: 'meesho', label: 'Meesho', tone: 'border-fuchsia-500/30', accent: 'text-fuchsia-500' },
+    { key: 'myntra', label: 'Myntra', tone: 'border-pink-500/30', accent: 'text-pink-500' },
+    { key: 'amazon', label: 'Amazon', tone: 'border-amber-500/30', accent: 'text-amber-500' },
+    { key: 'snapdeal', label: 'Snapdeal', tone: 'border-rose-500/30', accent: 'text-rose-500' },
+  ] as const
+  const batches = data?.batches || []
+
+  const reviewBatch = (batch: any) => {
+    setActiveBatch({
+      batch_id: batch.id, marketplace: batch.marketplace, status: batch.status,
+      filename: batch.filename, processing_date: batch.processing_date,
+      pages_scanned: batch.total_pages, unique_awbs: batch.unique_awbs,
+      duplicate_awbs: batch.duplicate_awbs, total_items: batch.total_items,
+      unknown_skus: batch.unknown_skus, labels: batch.labels || [],
+      parser_diagnostics: batch.parser_diagnostics || [], intake_source: batch.intake_source,
+      cropped_labels_url: `/batches/${batch.id}/pdf?sort=sku_grouped`,
+    } as ProcessBatchResponse)
+    go('process')
+  }
+
+  const printBatch = async (batch: any) => {
+    try {
+      const queued = await recordPrintEvent(batch.id, 'Operator', 'full_batch', 'sku_grouped', 'browser')
+      window.open(queued.pdf_url, '_blank')
+      await refreshBatches()
+      showToast(`${batch.marketplace} batch #${batch.id} opened and added to the print audit queue.`)
+    } catch (error: any) {
+      showToast(`Print failed: ${error.message}`)
+    }
+  }
+
+  return (
+    <>
+      <PageHead
+        eyebrow="Operations / Marketplace routing"
+        title="Marketplace Processing Sections"
+        description="Every incoming file is routed to its marketplace lane for review, product calculation, confirmation, and printing."
+        action={
+          <div className="flex gap-2 items-center">
+            <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)}
+              className="rounded-lg border border-border bg-card px-3 py-2 text-sm" />
+            <button className="button secondary" onClick={() => setSelectedDate(indiaDateString())}>Today</button>
+            <button className="button primary" onClick={() => go('process')}><Upload size={15} /> Upload labels</button>
+          </div>
+        }
+      />
+
+      {isLoading ? <ViewSkeleton eyebrow={selectedDate} title="Loading marketplace sections..." statCount={5} /> : (
+        <div className="grid gap-5">
+          {marketplaces.map((marketplace) => {
+            const lane = batches.filter((batch: any) => (batch.marketplace || 'flipkart') === marketplace.key)
+            const labels = lane.reduce((sum: number, batch: any) => sum + (batch.labels?.length || batch.total_pages || 0), 0)
+            const items = lane.reduce((sum: number, batch: any) => sum + (batch.total_items || 0), 0)
+            const needsReview = lane.filter((batch: any) => batch.status === 'needs_review').length
+            return (
+              <section key={marketplace.key} className={`panel border ${marketplace.tone}`} id={`marketplace-section-${marketplace.key}`}>
+                <div className="panel-title">
+                  <div className="flex items-center gap-3">
+                    <div className={`rounded-lg bg-slate-500/10 p-2 ${marketplace.accent}`}><Store size={19} /></div>
+                    <div><h2>{marketplace.label} Section</h2><p>{lane.length} batches · {labels} labels · {items} calculated product units</p></div>
+                  </div>
+                  <div className="flex gap-2"><Badge kind={needsReview ? 'warning' : 'success'}>{needsReview} need review</Badge></div>
+                </div>
+
+                {lane.length ? (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {lane.map((batch: any) => (
+                      <article key={batch.id} className="rounded-xl border border-border bg-card p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div><strong className="text-sm">Batch #{batch.id}</strong><p className="mt-1 max-w-[220px] truncate text-xs text-muted">{batch.filename}</p></div>
+                          <StatusBadge value={batch.status} />
+                        </div>
+                        <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+                          <div><strong className="block text-lg">{batch.labels?.length || batch.total_pages}</strong><span className="text-[9px] uppercase text-muted">Labels</span></div>
+                          <div><strong className="block text-lg text-emerald-500">{batch.unique_awbs}</strong><span className="text-[9px] uppercase text-muted">Unique</span></div>
+                          <div><strong className="block text-lg text-amber-500">{batch.total_items}</strong><span className="text-[9px] uppercase text-muted">Items</span></div>
+                          <div><strong className="block text-lg text-rose-500">{batch.unknown_skus}</strong><span className="text-[9px] uppercase text-muted">Unknown</span></div>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-[10px] text-muted">
+                          <span>{batch.intake_source || 'manual'} intake</span><span>Print: {String(batch.print_status).replaceAll('_', ' ')}</span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button className="button secondary" onClick={() => reviewBatch(batch)}><Eye size={13} /> Review</button>
+                          {batch.status !== 'confirmed' && batch.status !== 'cancelled' && (
+                            <button className="button secondary" onClick={async () => {
+                              await confirmBatch(batch.id); await refreshBatches(); revalidateWarehouseData(); showToast(`Batch #${batch.id} confirmed.`)
+                            }}><Check size={13} /> Confirm</button>
+                          )}
+                          <button className="button primary" onClick={() => printBatch(batch)}><Printer size={13} /> Print</button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted">
+                    No {marketplace.label} labels received on {selectedDate}.
+                  </div>
+                )}
+              </section>
+            )
+          })}
+        </div>
+      )}
+    </>
+  )
+}
+
+// ----------------------------------------------------------------------
 // 3. PRODUCTS & RECIPES VIEW
 // ----------------------------------------------------------------------
 function ProductsView({ showToast }: any) {
@@ -3906,6 +4118,7 @@ function ProductsView({ showToast }: any) {
   const { data: products = [], mutate: refreshProducts } = useSWR('/products', () => getProducts(true))
   const { data: categories = [], mutate: refreshCategories } = useSWR('/categories', getCategories)
   const { data: workers = [] } = useSWR('/workers', getWorkers)
+  const { data: inventory, mutate: refreshInventory } = useSWR('/inventory', getInventory)
 
   const filtered = products.filter((p) => {
     const matchSearch =
@@ -3926,6 +4139,27 @@ function ProductsView({ showToast }: any) {
   const bagProducts = products.filter((p) => p.bag_family)
   const sohelCount = products.filter((p) => p.assigned_worker === 'Sohel').length
   const kartikCount = products.filter((p) => p.assigned_worker === 'Kartik Da').length
+  const totalOnHand = products.reduce((sum, product) => sum + (Number(product.current_stock) || 0), 0)
+  const lowStockCount = products.filter((product) => (Number(product.current_stock) || 0) <= (Number(product.reorder_level) || 0)).length
+
+  const restockProduct = async (product: ApiProduct) => {
+    const rawQuantity = window.prompt(`Add stock for ${product.name}. Enter received quantity:`)
+    if (rawQuantity === null) return
+    const quantity = Number(rawQuantity)
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      showToast('Restock quantity must be greater than zero.')
+      return
+    }
+    const note = window.prompt('Optional supplier / purchase note:', 'Manual warehouse restock') || 'Manual warehouse restock'
+    try {
+      await addInventoryMovement({ product_id: product.id, quantity, type: 'restock', note })
+      await Promise.all([refreshProducts(), refreshInventory()])
+      revalidateWarehouseData()
+      showToast(`${product.name}: ${quantity} units added to stock.`)
+    } catch (err: any) {
+      showToast(`Restock failed: ${err.message}`)
+    }
+  }
 
   return (
     <>
@@ -3978,11 +4212,11 @@ function ProductsView({ showToast }: any) {
           tone="blue"
         />
         <Stat
-          label="PackCalc Recipes"
-          value={bagProducts.length}
-          note="Configured Bag Families"
-          icon={Calculator}
-          tone="amber"
+          label="Current Stock"
+          value={totalOnHand}
+          note={`${lowStockCount} products at or below reorder level`}
+          icon={Box}
+          tone={lowStockCount ? 'amber' : 'teal'}
         />
         <Stat
           label="Warehouse Categories"
@@ -3999,6 +4233,35 @@ function ProductsView({ showToast }: any) {
           tone="purple"
         />
       </div>
+
+      <section className="panel mb-6" id="inventory-movement-panel">
+        <div className="panel-title">
+          <div>
+            <h2>Recent inventory movements</h2>
+            <p>Batch deductions, restocks, and manual corrections form the stock audit ledger</p>
+          </div>
+
+          <Badge kind={lowStockCount ? 'warning' : 'success'}>{lowStockCount} low stock</Badge>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {(inventory?.movements || []).slice(0, 6).map((movement) => {
+            const product = products.find((item) => item.id === movement.product_id)
+            return (
+              <div key={movement.id} className="rounded-lg border border-border bg-card p-3 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <strong>{product?.name || `Product #${movement.product_id}`}</strong>
+                  <span className={movement.quantity < 0 ? 'text-rose-500 font-bold' : 'text-emerald-500 font-bold'}>
+                    {movement.quantity > 0 ? '+' : ''}{movement.quantity}
+                  </span>
+                </div>
+                <div className="mt-1 text-muted">Balance {movement.balance_after} · {movement.type.replace('_', ' ')}</div>
+                <div className="mt-1 truncate text-muted">{movement.note || new Date(movement.created_at).toLocaleString('en-IN')}</div>
+              </div>
+            )
+          })}
+          {!inventory?.movements?.length && <p className="text-xs text-muted">No inventory movements recorded yet.</p>}
+        </div>
+      </section>
 
       {/* Advanced Toolbar */}
       <div className="toolbar flex-wrap gap-3">
@@ -4083,6 +4346,7 @@ function ProductsView({ showToast }: any) {
               <th>Category</th>
               <th>Picking Station</th>
               <th>PackCalc Bag Recipe</th>
+              <th>On-hand Stock</th>
               <th>Sort Order</th>
               <th>Status</th>
               <th className="text-right">Actions</th>
@@ -4129,6 +4393,14 @@ function ProductsView({ showToast }: any) {
                     )}
                   </td>
                   <td>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-bold ${(Number(p.current_stock) || 0) <= (Number(p.reorder_level) || 0) ? 'text-rose-500' : 'text-emerald-500'}`}>
+                        {Number(p.current_stock) || 0}
+                      </span>
+                      <span className="text-[10px] text-muted">min {Number(p.reorder_level) || 0}</span>
+                    </div>
+                  </td>
+                  <td>
                     <span className="mono text-xs text-muted font-medium">{p.sort_order}</span>
                   </td>
                   <td>
@@ -4136,6 +4408,9 @@ function ProductsView({ showToast }: any) {
                   </td>
                   <td className="text-right">
                     <div className="inline-flex items-center gap-1.5">
+                      <button className="small-button" onClick={() => restockProduct(p)} title="Receive stock">
+                        <PlusCircle size={13} className="mr-1 inline" /> Stock
+                      </button>
                       <button
                         className="small-button"
                         onClick={() => {
@@ -4165,7 +4440,7 @@ function ProductsView({ showToast }: any) {
               ))
             ) : (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-muted">
+                <td colSpan={9} className="text-center py-12 text-muted">
                   <Package size={28} className="mx-auto mb-2 text-muted opacity-40" />
                   <p className="font-medium text-sm">No products found matching your filters</p>
                   <p className="text-xs text-muted mt-1">Try adjusting your search terms or filters above</p>
@@ -5253,6 +5528,9 @@ function SettingsView({ showToast }: any) {
       return null
     }
   })
+  const { data: ingestionData, mutate: refreshIngestion } = useSWR('/ingestion/schedules', getIngestionSchedules)
+  const { data: printQueue, mutate: refreshPrintQueue } = useSWR('/print-jobs', () => getPrintJobs('all'))
+  const { data: readiness, mutate: refreshReadiness } = useSWR('/readiness', getSystemReadiness, { refreshInterval: 60000 })
 
   const [newWorkerName, setNewWorkerName] = useState('')
   const [newWorkerPhone, setNewWorkerPhone] = useState('')
@@ -5260,6 +5538,31 @@ function SettingsView({ showToast }: any) {
   const [isSyncingDisk, setIsSyncingDisk] = useState(false)
   const [isResettingDb, setIsResettingDb] = useState(false)
   const [copiedSnippet, setCopiedSnippet] = useState(false)
+  const [runningMarketplace, setRunningMarketplace] = useState<string | null>(null)
+
+  const saveSchedule = async (schedule: IngestionSchedule, patch: Partial<IngestionSchedule>) => {
+    try {
+      await updateIngestionSchedule({ marketplace: schedule.marketplace, ...patch })
+      await refreshIngestion()
+      showToast(`${schedule.marketplace.charAt(0).toUpperCase() + schedule.marketplace.slice(1)} intake schedule updated.`)
+    } catch (err: any) {
+      showToast(`Schedule update failed: ${err.message}`)
+    }
+  }
+
+  const runIngestionNow = async (marketplace: IngestionSchedule['marketplace']) => {
+    setRunningMarketplace(marketplace)
+    try {
+      const result = await runMarketplaceIngestion(marketplace, true)
+      await refreshIngestion()
+      const run = result.runs[0]
+      showToast(run?.message || `${marketplace} intake checked.`)
+    } catch (err: any) {
+      showToast(`Intake check failed: ${err.message}`)
+    } finally {
+      setRunningMarketplace(null)
+    }
+  }
 
   const handleAddWorker = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -5386,6 +5689,145 @@ function SettingsView({ showToast }: any) {
       />
 
       <div className="flex flex-col gap-6">
+        <section className="panel" id="system-readiness-settings">
+          <div className="section-head mb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Badge kind={readiness?.status === 'ready' ? 'success' : 'warning'}>
+                  {readiness?.status === 'ready' ? 'Ready' : 'Action required'}
+                </Badge>
+                <h2 className="text-base font-bold">Deployment readiness</h2>
+              </div>
+              <p className="text-xs text-muted mt-1">Live verification of storage, automation, marketplace feeds, and printer-agent configuration.</p>
+            </div>
+            <button className="button secondary" onClick={() => refreshReadiness()}><RefreshCw size={14} /> Recheck</button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {Object.entries(readiness?.checks || {}).map(([key, check]) => (
+              <div key={key} className={`rounded-lg border p-3 ${check.ready ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
+                <div className="flex items-center gap-2 text-xs font-bold"><span className={check.ready ? 'text-emerald-500' : 'text-amber-500'}>{check.ready ? '✓' : '!'}</span>{key.replaceAll('_', ' ')}</div>
+                <p className="mt-1 text-[11px] text-muted">{check.detail}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-5">
+            {Object.entries(readiness?.marketplaces || {}).map(([marketplace, status]) => (
+              <div key={marketplace} className="rounded-lg border border-border bg-card p-3 text-center">
+                <strong className="block text-xs capitalize">{marketplace}</strong>
+                <span className={`mt-1 block text-[10px] font-bold ${status.ready ? 'text-emerald-500' : 'text-amber-500'}`}>{status.ready ? 'Feed ready' : 'Feed missing'}</span>
+                <span className="mt-1 block text-[10px] text-muted">{status.scheduled_time || 'No schedule'}</span>
+              </div>
+            ))}
+          </div>
+          {!!readiness?.blockers?.length && (
+            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+              <strong>{readiness.blockers.length} deployment blockers:</strong> {readiness.blockers.map((blocker) => blocker.detail).join(' ')}
+            </div>
+          )}
+        </section>
+
+        <section className="panel" id="print-queue-settings">
+          <div className="section-head mb-4">
+            <div>
+              <div className="flex items-center gap-2"><Badge kind="success">Printing</Badge><h2 className="text-base font-bold">Thermal print queue</h2></div>
+              <p className="text-xs text-muted mt-1">Printer agents claim queued jobs; browser-opened jobs can be confirmed after physical printing.</p>
+            </div>
+            <Printer size={20} className="text-blue-500" />
+          </div>
+          <div className="grid gap-2">
+            {(printQueue?.jobs || []).slice(0, 8).map((job) => (
+              <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
+                <div>
+                  <div className="flex items-center gap-2"><strong className="text-sm">Job #{job.id} · Batch #{job.batch_id}</strong><StatusBadge value={job.status} /></div>
+                  <p className="text-xs text-muted mt-1">{job.marketplace} · {job.label_count} labels · {job.sort_mode.replaceAll('_', ' ')}</p>
+                  {job.error_message && <p className="text-xs text-rose-500 mt-1">{job.error_message}</p>}
+                </div>
+                <div className="flex gap-2">
+                  <button className="button secondary" onClick={() => window.open(job.pdf_url, '_blank')}><Eye size={14} /> PDF</button>
+                  {job.status === 'opened' && (
+                    <button className="button primary" onClick={async () => {
+                      await updatePrintJob(job.id, 'complete')
+                      await refreshPrintQueue()
+                      revalidateWarehouseData()
+                      showToast(`Print job #${job.id} marked printed.`)
+                    }}><Check size={14} /> Mark printed</button>
+                  )}
+                  {['queued', 'claimed', 'failed', 'opened'].includes(job.status) && (
+                    <button className="button secondary" onClick={async () => {
+                      await updatePrintJob(job.id, 'cancel')
+                      await refreshPrintQueue()
+                    }}><X size={14} /> Cancel</button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {!printQueue?.jobs?.length && <p className="text-xs text-muted">No print jobs yet. Printing a batch will add it here.</p>}
+          </div>
+        </section>
+
+        <section className="panel" id="marketplace-ingestion-schedules">
+          <div className="section-head mb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Badge kind="success">Automation</Badge>
+                <h2 className="text-base font-bold">Designated-time label intake</h2>
+                <Badge kind={ingestionData?.scheduler?.configured ? 'success' : 'warning'}>
+                  {ingestionData?.scheduler?.configured ? 'Scheduler active · 5 min' : 'CRON_SECRET required'}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted mt-1">Daily marketplace collection times use Asia/Kolkata. Sunday is excluded by default.</p>
+            </div>
+            <Clock size={20} className="text-blue-500" />
+          </div>
+
+          <div className="grid gap-3">
+            {(ingestionData?.schedules || []).map((schedule) => {
+              const label = schedule.marketplace.charAt(0).toUpperCase() + schedule.marketplace.slice(1)
+              const lastRun = ingestionData?.runs.find((run) => run.marketplace === schedule.marketplace)
+              return (
+                <div key={schedule.marketplace} className="grid gap-3 rounded-xl border border-border bg-card p-3 md:grid-cols-[1fr_auto_auto_auto] md:items-center">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <strong className="text-sm">{label}</strong>
+                      <Badge kind={schedule.connection_status === 'configured' ? 'success' : 'warning'}>
+                        {schedule.connection_status === 'configured' ? 'Connected' : 'Credentials required'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted mt-1">
+                      {lastRun ? `${lastRun.status.replaceAll('_', ' ')} · ${new Date(lastRun.started_at).toLocaleString('en-IN')}` : 'No intake checks recorded'}
+                    </p>
+                  </div>
+                  <input
+                    type="time"
+                    defaultValue={schedule.time}
+                    onBlur={(event) => event.target.value !== schedule.time && saveSchedule(schedule, { time: event.target.value })}
+                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    aria-label={`${label} collection time`}
+                  />
+                  <button
+                    className={`button secondary ${schedule.enabled ? 'text-emerald-600' : 'text-muted'}`}
+                    onClick={() => saveSchedule(schedule, { enabled: !schedule.enabled })}
+                  >
+                    {schedule.enabled ? 'Enabled' : 'Paused'}
+                  </button>
+                  <button
+                    className="button primary"
+                    disabled={runningMarketplace === schedule.marketplace}
+                    onClick={() => runIngestionNow(schedule.marketplace)}
+                  >
+                    <RefreshCw size={14} className={runningMarketplace === schedule.marketplace ? 'animate-spin' : ''} />
+                    Check now
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+            Timers and audit records are active. Automatic downloads begin after each marketplace seller API credential and label endpoint is connected.
+          </div>
+        </section>
+
         {/* Development & Database Lifecycle Management Section */}
         <section className="panel danger-zone" id="settings-database-card">
           <div className="section-head mb-3">
@@ -6351,6 +6793,8 @@ function ProductModal({ product, categories, workers, close, onSaved }: any) {
   const [bagFamily, setBagFamily] = useState(product?.bag_family || '')
   const [raw3Bag, setRaw3Bag] = useState(product?.raw_3bag_qty ?? 0)
   const [raw2Bag, setRaw2Bag] = useState(product?.raw_2bag_qty ?? 0)
+  const [openingStock, setOpeningStock] = useState(product?.current_stock ?? 0)
+  const [reorderLevel, setReorderLevel] = useState(product?.reorder_level ?? 0)
   const [notes, setNotes] = useState(product?.notes || '')
   const [active, setActive] = useState(product ? product.active : true)
   const [loading, setLoading] = useState(false)
@@ -6369,6 +6813,8 @@ function ProductModal({ product, categories, workers, close, onSaved }: any) {
       bag_family: bagFamily ? bagFamily : null,
       raw_3bag_qty: Number(raw3Bag),
       raw_2bag_qty: Number(raw2Bag),
+      ...(!product ? { current_stock: Number(openingStock) } : {}),
+      reorder_level: Number(reorderLevel),
       notes: notes.trim() || null,
       active,
     }
@@ -6456,6 +6902,21 @@ function ProductModal({ product, categories, workers, close, onSaved }: any) {
                   value={sortOrder}
                   onChange={(e) => setSortOrder(Number(e.target.value))}
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {!product && (
+                <div className="form-group">
+                  <label className="text-xs font-semibold text-foreground">Opening Stock</label>
+                  <input type="number" min="0" value={openingStock} onChange={(e) => setOpeningStock(Number(e.target.value))}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground" />
+                </div>
+              )}
+              <div className="form-group">
+                <label className="text-xs font-semibold text-foreground">Low-stock Reorder Level</label>
+                <input type="number" min="0" value={reorderLevel} onChange={(e) => setReorderLevel(Number(e.target.value))}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground" />
               </div>
             </div>
           </div>
